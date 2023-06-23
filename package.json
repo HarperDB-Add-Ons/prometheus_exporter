@@ -1,0 +1,14 @@
+{
+  "type": "commonjs",
+  "name": "harperdb_exporter",
+  "version": "0.1.0",
+  "description": "HarperDB Promethius Exporter",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "HarperDB, Inc.",
+  "license": "ISC",
+  "dependencies": {
+    "prom-client": "^14.2.0"
+  }
+}
