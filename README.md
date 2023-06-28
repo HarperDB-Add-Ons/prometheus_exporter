@@ -23,7 +23,7 @@ This exporter plugs in directly to an instance of HarperDB and responds to Prome
     ```
    Make sure that `enabled: true` and make note of your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/docs/configuration#customfunctions) for more details.
 2. Clone this repo to the `$hdb/custom_functions` directory of your HarperDB instance.
-3. Run `npm install`
+3. From the `$hdb/custom_functions/harperdb_exporter` folder run `npm install`
 4. [Restart Custom Functions](https://docs.harperdb.io/docs/custom-functions/restarting-server).
 
 ## Prometheus Setup
