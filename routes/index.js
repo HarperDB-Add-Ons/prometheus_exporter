@@ -25,6 +25,20 @@ module.exports = async (server, { hdbCore, logger }) => {
 		url: '/metrics',
 		method: 'GET',
 		handler: async (request, reply) => {
+			//reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
+			puts_gauge.reset();
+			deletes_gauge.reset();
+			txns_gauge.reset();
+			page_flushes_gauge.reset();
+			writes_gauge.reset();
+			pages_written_gauge.reset();
+			time_during_txns_gauge.reset();
+			time_start_txns_gauge.reset();
+			time_page_flushes_gauge.reset();
+			time_sync_gauge.reset();
+			thread_count_gauge.reset();
+			harperdb_cpu_percentage_gauge.reset();
+
 			request.body = {
 				operation: 'system_information',
 				attributes: ['database_metrics', 'harperdb_processes', 'threads']
