@@ -21,7 +21,7 @@ This exporter plugs in directly to an instance of HarperDB and responds to Prome
       sessionAffinity: null
       timeout: 120000
    ```
-      Note your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/harperdb-4.2-pre-release/configuration#http) for more details.
+   Note your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/harperdb-4.2-pre-release/configuration#http) for more details.
 2. Clone this repo to the `$hdb/components` directory of your HarperDB instance.
 3. From the `$hdb/components/harperdb_exporter` folder run `npm install`
 4. [Restart Components](https://docs.harperdb.io/harperdb-4.2-pre-release/applications#restarting-your-instance).
