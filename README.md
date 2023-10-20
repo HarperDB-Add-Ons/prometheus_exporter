@@ -1,12 +1,36 @@
 # HarperDB Prometheus Exporter
+*Note: this exporter will only work with HarperDB v4.1.2 or higher.*
+
 [HarperDB's](https://www.harperdb.io/) Prometheus Exporter. This Application exposes Node.js and HarperDB metrics via a /metrics endpoint.  
 This exporter plugs in directly to an instance of HarperDB and responds to Prometheus scrapes.
 
 ## HarperDB Setup
+### Instructions for v4.2.0 and higher (including beta releases)
+1. Note your components port: 
 
+   Look in your `$hdb/harperdb-config.yaml`. You will find the section:
+    ```yaml
+    http:
+      compressionThreshold: 1200
+      cors: false
+      corsAccessList:
+         - null
+      keepAliveTimeout: 30000
+      port: 9926
+      securePort: null
+      sessionAffinity: null
+      timeout: 120000
+   ```
+   Note your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/harperdb-4.2-pre-release/configuration#http) for more details.
+2. Clone this repo to the `$hdb/components` directory of your HarperDB instance.
+3. From the `$hdb/components/harperdb_exporter` folder run `npm install`
+4. [Restart Components](https://docs.harperdb.io/harperdb-4.2-pre-release/applications#restarting-your-instance).
+
+
+### Instructions for v4.1.2 - 4.1.x
 1. Create a HarperDB Instance with Custom Functions enabled. *Note: this exporter will only work with HarperDB v4.1.2 or higher.*
    
-    Look in your `$hdb/harperdb-config.yaml`. You will find a section that will look like:
+    Look in your `$hdb/harperdb-config.yaml`. You will find the section:
     ```yaml
     customFunctions:
       enabled: true
