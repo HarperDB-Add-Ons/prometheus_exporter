@@ -1,5 +1,5 @@
 # HarperDB Prometheus Exporter
-*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here]())
+*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here](https://github.com/HarperDB-Add-Ons/harperdb_exporter/releases/tag/v0.1.0))
 
 [HarperDB's](https://www.harperdb.io/) Prometheus Exporter. This Application exposes Node.js and HarperDB metrics via a /metrics endpoint.  
 This exporter plugs in directly to an instance of HarperDB and responds to Prometheus scrapes.
@@ -25,30 +25,6 @@ This exporter plugs in directly to an instance of HarperDB and responds to Prome
 2. Clone this repo to the `$hdb/components` directory of your HarperDB instance.
 3. From the `$hdb/components/harperdb_exporter` folder run `npm install`
 4. [Restart Components](https://docs.harperdb.io/harperdb-4.2-pre-release/applications#restarting-your-instance).
-
-
-### Instructions for v4.1.2 - 4.1.x
-1. Create a HarperDB Instance with Custom Functions enabled. *Note: this exporter will only work with HarperDB v4.1.2 or higher.*
-
-   Look in your `$hdb/harperdb-config.yaml`. You will find the section:
-    ```yaml
-    customFunctions:
-      enabled: true
-      network:
-        cors: false
-        corsAccessList:
-          - null
-        headersTimeout: 60000
-        https: false
-        keepAliveTimeout: 5000
-        port: 9926
-        timeout: 120000
-      nodeEnv: production
-    ```
-   Make sure that `enabled: true` and make note of your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/docs/configuration#customfunctions) for more details.
-2. Clone this repo to the `$hdb/custom_functions` directory of your HarperDB instance.
-3. From the `$hdb/custom_functions/harperdb_exporter` folder run `npm install`
-4. [Restart Custom Functions](https://docs.harperdb.io/docs/custom-functions/restarting-server).
 
 ## Prometheus Setup
 Some small configuration changes are needed in your prometheus.yml to tell Prometheus the address of the HarperDB Exporter metrics end point.
@@ -86,7 +62,16 @@ Metrics specific to HarperDB (all metrics are [Gauges](https://prometheus.io/doc
 | `harperdb_table_time_sync_total` | Total time spent on write calls by table.                                                                                                                        |
 | `harperdb_process_threads_count` | Number of threads in the HarperDB core process.                                                                                                                  |
 | `harperdb_process_cpu_utilization` | CPU utilization of a HarperDB process.                                                                                                                           |
-
+| `connection` | Number of successful connection attempts by protocol |
+| `open_connections` | Average number of connections across all threads |
+| `bytes_sent` | Bytes sent by protocol |
+| `bytes_received` | Bytes received by protocol |
+| `cache_hit` | Number of cache hits by table |
+| `cache_miss` | Number of cache misses by table |
+| `success` | Number of success requests by endpoint |
+| `duration` | Time for HarperDB to execute request in ms |
+| `cache_resolution` | Time to resolve a cache miss |
+| `transfer` | Time to transfer request (ms) |
 A complete sample response of `/metrics`:
 ```text
 # HELP process_cpu_user_seconds_total Total user CPU time spent in seconds.
