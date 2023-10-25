@@ -62,16 +62,16 @@ Metrics specific to HarperDB (all metrics are [Gauges](https://prometheus.io/doc
 | `harperdb_table_time_sync_total` | Total time spent on write calls by table.                                                                                                                        |
 | `harperdb_process_threads_count` | Number of threads in the HarperDB core process.                                                                                                                  |
 | `harperdb_process_cpu_utilization` | CPU utilization of a HarperDB process.                                                                                                                           |
-| `connection` | Number of successful connection attempts by protocol |
-| `open_connections` | Average number of connections across all threads |
-| `bytes_sent` | Bytes sent by protocol |
-| `bytes_received` | Bytes received by protocol |
-| `cache_hit` | Number of cache hits by table |
-| `cache_miss` | Number of cache misses by table |
-| `success` | Number of success requests by endpoint |
-| `duration` | Time for HarperDB to execute request in ms |
-| `cache_resolution` | Time to resolve a cache miss |
-| `transfer` | Time to transfer request (ms) |
+| `connection` | Number of successful connection attempts by protocol                                                                                                             |
+| `open_connections` | Average number of connections across all threads                                                                                                                 |
+| `bytes_sent` | Bytes sent by protocol                                                                                                                                           |
+| `bytes_received` | Bytes received by protocol                                                                                                                                       |
+| `cache_hit` | Number of cache hits by table                                                                                                                                    |
+| `cache_miss` | Number of cache misses by table                                                                                                                                  |
+| `success` | Number of success requests by endpoint                                                                                                                           |
+| `duration` | Time for HarperDB to execute request in ms                                                                                                                       |
+| `cache_resolution` | Time to resolve a cache miss                                                                                                                                     |
+| `transfer` | Total amount of time spent transferring the contents of a response (ms)                                                                                          |
 A complete sample response of `/metrics`:
 ```text
 # HELP process_cpu_user_seconds_total Total user CPU time spent in seconds.
