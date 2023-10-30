@@ -1,5 +1,5 @@
 # HarperDB Prometheus Exporter
-*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here](https://github.com/HarperDB-Add-Ons/prometheus_exporter/releases/tag/v0.1.0))
+*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here](https://github.com/HarperDB-Add-Ons/prometheus_exporter/releases/tag/v0.1.1))
 
 [HarperDB's](https://www.harperdb.io/) Prometheus Exporter. This Application exposes Node.js and HarperDB metrics via a /metrics endpoint.  
 This exporter plugs in directly to an instance of HarperDB and responds to Prometheus scrapes.
