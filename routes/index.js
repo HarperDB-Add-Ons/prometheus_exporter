@@ -1,4 +1,7 @@
 'use strict';
+const {hdb_analytics} = databases.system;
+const { analytics } = server.config;
+const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
 
 const Prometheus = require('prom-client');
 
@@ -17,6 +20,14 @@ const time_sync_gauge = new Prometheus.Gauge({name: 'harperdb_table_time_sync_to
 
 const thread_count_gauge = new Prometheus.Gauge({name: 'harperdb_process_threads_count', help: 'Number of threads in the HarperDB core process'})
 const harperdb_cpu_percentage_gauge =  new Prometheus.Gauge({name: 'harperdb_process_cpu_utilization', help: 'CPU utilization of a HarperDB process', labelNames: ['process_name']});
+
+const connections_gauge = new Prometheus.Gauge({name: 'connection', help: 'Number of successful connection attempts by protocol', labelNames: ['protocol', 'type', 'action']});
+const open_connections_gauge = new Prometheus.Gauge({name: 'open_connections', help: 'Average number of connections across all threads', labelNames: ['protocol']});
+const bytes_sent_gauge = new Prometheus.Gauge({name: 'bytes_sent', help: 'Bytes sent by protocol', labelNames: ['protocol', 'action']});
+const bytes_received_gauge = new Prometheus.Gauge({name: 'bytes_received', help: 'Bytes received by protocol', labelNames: ['protocol', 'action']});
+const cache_hits_gauge = new Prometheus.Gauge({name: 'cache_hit', help: 'Number of cache hits by table', labelNames: ['table']});
+const cache_miss_gauge = new Prometheus.Gauge({name: 'cache_miss', help: 'Number of cache misses by table', labelNames: ['table']});
+const success_gauge = new Prometheus.Gauge({name: 'success', help: 'Number of success requests by endpoint', labelNames: ['path', 'type', 'method', 'label']});
 
 // eslint-disable-next-line no-unused-vars,require-await
 module.exports = async (server, { hdbCore, logger }) => {
@@ -38,6 +49,14 @@ module.exports = async (server, { hdbCore, logger }) => {
 			time_sync_gauge.reset();
 			thread_count_gauge.reset();
 			harperdb_cpu_percentage_gauge.reset();
+
+			connections_gauge.reset();
+			open_connections_gauge.reset();
+			bytes_sent_gauge.reset();
+			cache_hits_gauge.reset();
+			cache_miss_gauge.reset();
+			bytes_received_gauge.reset();
+			success_gauge.reset();
 
 			request.body = {
 				operation: 'system_information',
@@ -77,9 +96,106 @@ module.exports = async (server, { hdbCore, logger }) => {
 				}
 			}
 
+			let prom_results = await Prometheus.register.metrics();
+			let output = await generateMetricsFromAnalytics();
 			reply.type(Prometheus.register.contentType)
 
-			return await Prometheus.register.metrics();
+			if(output.length > 0) {
+				return output.join('\n') + '\n' + prom_results
+			} else {
+				return prom_results;
+			}
 		}
 	});
 };
+
+async function generateMetricsFromAnalytics() {
+	const end_at = Date.now();
+	const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
+	let results = await hdb_analytics.search({conditions: [
+			{ attribute: 'id', value: [start_at, end_at], comparator: 'between' }
+		]});
+
+	let output = [];
+
+	for await (const metric of results) {
+		switch (metric.metric) {
+			case 'connection':
+				connections_gauge.set({ protocol: metric.path, action: metric.method,  type: 'total'}, metric.total);
+				connections_gauge.set({ protocol: metric.path, action: metric.method, type: 'success' }, metric.count);
+				break;
+			case 'mqtt-connections':
+				open_connections_gauge.set({ protocol: 'mqtt'}, metric.count);
+				break;
+			case 'bytes-sent':
+				bytes_sent_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
+				break;
+			case 'bytes-received':
+				bytes_received_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
+				break;
+			case 'TTFB':
+			case 'duration':
+				output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
+				output.push(`# TYPE ${metric.metric} summary`);
+				output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+				output.push(`${metric.metric}{quantile="0.1",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+				output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+				output.push(`${metric.metric}{quantile="0.5",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+				output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+				output.push(`${metric.metric}{quantile="0.9",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+				output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+				output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+				output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+				output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+				//needs to be a new line after every metric
+				output.push('');
+				break;
+			case 'cache-resolution':
+				//prometheus doesn't like hyphens in metric names
+				let metric_name = 'cache_resolution';
+				output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
+				output.push(`# TYPE ${metric_name} summary`);
+				output.push(`${metric_name}{quantile="0.01",table="${metric.path}"} ${metric.p1}`);
+				output.push(`${metric_name}{quantile="0.1",table="${metric.path}"} ${metric.p10}`);
+				output.push(`${metric_name}{quantile="0.25",table="${metric.path}"} ${metric.p25}`);
+				output.push(`${metric_name}{quantile="0.5",table="${metric.path}"} ${metric.median}`);
+				output.push(`${metric_name}{quantile="0.75",table="${metric.path}"} ${metric.p75}`);
+				output.push(`${metric_name}{quantile="0.9",table="${metric.path}"} ${metric.p90}`);
+				output.push(`${metric_name}{quantile="0.95",table="${metric.path}"} ${metric.p95}`);
+				output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
+				output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
+				output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
+				//needs to be a new line after every metric
+				output.push('');
+				break;
+			case 'cache-hit':
+				cache_hits_gauge.set({table: metric.path}, metric.total);
+				cache_miss_gauge.set({table: metric.path}, metric.count - metric.total);
+				break;
+			case 'success':
+				success_gauge.set({ path: metric.path, method: metric.method, type: metric.type, label: 'total'}, metric.total);
+				success_gauge.set({ path: metric.path, method: metric.method, type: metric.type, label: 'success' }, metric.count);
+				break;
+			case 'transfer':
+				output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
+				output.push(`# TYPE ${metric.metric} summary`);
+				output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+				output.push(`${metric.metric}{quantile="0.1",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+				output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+				output.push(`${metric.metric}{quantile="0.5",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+				output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+				output.push(`${metric.metric}{quantile="0.9",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+				output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+				output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+				output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+				output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+				//needs to be a new line after every metric
+				output.push('');
+				break;
+			default:
+				//console.log(metric);
+				break;
+		}
+	}
+	return output;
+}
