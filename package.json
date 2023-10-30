@@ -1,6 +1,6 @@
 {
   "type": "commonjs",
-  "name": "harperdb_exporter",
+  "name": "harperdb_prometheus_exporter",
   "version": "1.0.0",
   "description": "HarperDB Prometheus Exporter",
   "scripts": {

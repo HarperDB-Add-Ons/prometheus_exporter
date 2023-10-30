@@ -1,5 +1,5 @@
 # HarperDB Prometheus Exporter
-*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here](https://github.com/HarperDB-Add-Ons/harperdb_exporter/releases/tag/v0.1.0))
+*Note: this exporter will only work with HarperDB v4.2 or higher. (If you are looking for a compatible version for below v4.2 check [here](https://github.com/HarperDB-Add-Ons/prometheus_exporter/releases/tag/v0.1.0))
 
 [HarperDB's](https://www.harperdb.io/) Prometheus Exporter. This Application exposes Node.js and HarperDB metrics via a /metrics endpoint.  
 This exporter plugs in directly to an instance of HarperDB and responds to Prometheus scrapes.
@@ -23,18 +23,18 @@ This exporter plugs in directly to an instance of HarperDB and responds to Prome
    ```
    Note your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/harperdb-4.2-pre-release/configuration#http) for more details.
 2. Clone this repo to the `$hdb/components` directory of your HarperDB instance.
-3. From the `$hdb/components/harperdb_exporter` folder run `npm install`
+3. From the `$hdb/components/prometheus_exporter` folder run `npm install`
 4. [Restart Components](https://docs.harperdb.io/harperdb-4.2-pre-release/applications#restarting-your-instance).
 
 ## Prometheus Setup
 Some small configuration changes are needed in your prometheus.yml to tell Prometheus the address of the HarperDB Exporter metrics end point.
 To know what port to use you should reference bullet point 1 in HarperDB Setup.
-A HarperDB Custom Function project creates a path off of the host address.  The default for this exporter project would be `/harperdb_exporter/metrics`. If you rename this project's
+A HarperDB Custom Function project creates a path off of the host address.  The default for this exporter project would be `/prometheus_exporter/metrics`. If you rename this project's
 A sample prometheus configuration would look like:
 ```yaml
 scrape_configs:
   - job_name: "prometheus"
-    metrics_path: "/harperdb_exporter/metrics"
+    metrics_path: "/prometheus_exporter/metrics"
 
     static_configs:
       - targets: ["localhost:9926"]
