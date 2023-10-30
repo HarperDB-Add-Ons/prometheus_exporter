@@ -1,7 +1,7 @@
 {
   "type": "commonjs",
-  "name": "harperdb_exporter",
-  "version": "0.1.0",
+  "name": "harperdb_prometheus_exporter",
+  "version": "0.1.1",
   "description": "HarperDB Promethius Exporter",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
