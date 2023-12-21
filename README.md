@@ -24,7 +24,7 @@ This exporter plugs in directly to an instance of HarperDB and responds to Prome
    Note your defined `port`. Please reference [HarperDB configuration documentation](https://docs.harperdb.io/harperdb-4.2-pre-release/configuration#http) for more details.
 2. Clone this repo to the `$hdb/components` directory of your HarperDB instance.
 3. From the `$hdb/components/prometheus_exporter` folder run `npm install`
-4. [Restart Components](https://docs.harperdb.io/harperdb-4.2-pre-release/applications#restarting-your-instance).
+4. [Restart Components]([https://docs.harperdb.io/docs/developers/applications#restarting-your-instance]).
 
 ## Prometheus Setup
 Some small configuration changes are needed in your prometheus.yml to tell Prometheus the address of the HarperDB Exporter metrics end point.
