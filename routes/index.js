@@ -29,6 +29,10 @@ const cache_hits_gauge = new Prometheus.Gauge({name: 'cache_hit', help: 'Number 
 const cache_miss_gauge = new Prometheus.Gauge({name: 'cache_miss', help: 'Number of cache misses by table', labelNames: ['table']});
 const success_gauge = new Prometheus.Gauge({name: 'success', help: 'Number of success requests by endpoint', labelNames: ['path', 'type', 'method', 'label']});
 
+const filesystem_size_bytes = new Prometheus.Gauge({name: 'filesystem_size_bytes', help: 'Filesystem size in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
+const filesystem_avail_bytes = new Prometheus.Gauge({name: 'filesystem_free_bytes', help: 'Filesystem free space in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
+const filesystem_used_bytes = new Prometheus.Gauge({name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
+
 // eslint-disable-next-line no-unused-vars,require-await
 module.exports = async (server, { hdbCore, logger }) => {
 
@@ -58,9 +62,13 @@ module.exports = async (server, { hdbCore, logger }) => {
 			bytes_received_gauge.reset();
 			success_gauge.reset();
 
+			filesystem_size_bytes.reset();
+			filesystem_avail_bytes.reset();
+			filesystem_used_bytes.reset();
+
 			request.body = {
 				operation: 'system_information',
-				attributes: ['database_metrics', 'harperdb_processes', 'threads']
+				attributes: ['database_metrics', 'harperdb_processes', 'threads', 'disk']
 			};
 
 			let system_info = await hdbCore.requestWithoutAuthentication(request);
@@ -70,6 +78,12 @@ module.exports = async (server, { hdbCore, logger }) => {
 			if(system_info.harperdb_processes.core.length > 0){
 				harperdb_cpu_percentage_gauge.set({process_name: 'harperdb_core'}, system_info.harperdb_processes.core[0].cpu);
 			}
+
+			system_info.disk.size.forEach(device => {
+				filesystem_size_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.size);
+				filesystem_avail_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.available);
+				filesystem_used_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.use);
+			});
 
 			system_info.harperdb_processes.clustering.forEach(process_data=>{
 				if(process_data.params.endsWith('hub.json')){
