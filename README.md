@@ -72,6 +72,9 @@ Metrics specific to HarperDB (all metrics are [Gauges](https://prometheus.io/doc
 | `duration` | Time for HarperDB to execute request in ms                                                                                                                       |
 | `cache_resolution` | Time to resolve a cache miss                                                                                                                                     |
 | `transfer` | Total amount of time spent transferring the contents of a response (ms)                                                                                          |
+| `filesystem_size_bytes` | Filesystem size in bytes. |
+| `filesystem_free_bytes` | Filesystem free space in bytes. |
+| `filesystem_used_bytes` | Filesystem space used in bytes. |
 A complete sample response of `/metrics`:
 ```text
 # HELP process_cpu_user_seconds_total Total user CPU time spent in seconds.
@@ -283,4 +286,33 @@ harperdb_process_cpu_utilization{process_name="harperdb_core"} 0.000282400147752
 harperdb_process_cpu_utilization{process_name="harperdb_clustering_hub"} 0.001069399009124807
 harperdb_process_cpu_utilization{process_name="harperdb_clustering_leaf"} 0.0011405463331709813
 
+# HELP filesystem_size_bytes Filesystem size in bytes.
+# TYPE filesystem_size_bytes gauge
+filesystem_size_bytes{device="none",fstype="9p",mountpoint="/usr/lib/wsl/drivers"} 490835275776
+filesystem_size_bytes{device="/dev/sdc",fstype="ext4",mountpoint="/"} 269427478528
+filesystem_size_bytes{device="none",fstype="overlay",mountpoint="/usr/lib/wsl/lib"} 8299667456
+filesystem_size_bytes{device="drvfs",fstype="9p",mountpoint="/mnt/c"} 490835275776
+filesystem_size_bytes{device="/dev/sde",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop-data/isocache"} 1081101176832
+filesystem_size_bytes{device="/dev/sdd",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop/docker-desktop-user-distro"} 1081101176832
+filesystem_size_bytes{device="/dev/loop0",fstype="iso9660",mountpoint="/mnt/wsl/docker-desktop/cli-tools"} 463595520
+
+# HELP filesystem_free_bytes Filesystem free space in bytes.
+# TYPE filesystem_free_bytes gauge
+filesystem_free_bytes{device="none",fstype="9p",mountpoint="/usr/lib/wsl/drivers"} 120824410112
+filesystem_free_bytes{device="/dev/sdc",fstype="ext4",mountpoint="/"} 227734966272
+filesystem_free_bytes{device="none",fstype="overlay",mountpoint="/usr/lib/wsl/lib"} 8299667456
+filesystem_free_bytes{device="drvfs",fstype="9p",mountpoint="/mnt/c"} 120824410112
+filesystem_free_bytes{device="/dev/sde",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop-data/isocache"} 1015033745408
+filesystem_free_bytes{device="/dev/sdd",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop/docker-desktop-user-distro"} 1026045915136
+filesystem_free_bytes{device="/dev/loop0",fstype="iso9660",mountpoint="/mnt/wsl/docker-desktop/cli-tools"} 0
+
+# HELP filesystem_used_bytes Filesystem space used in bytes.
+# TYPE filesystem_used_bytes gauge
+filesystem_used_bytes{device="none",fstype="9p",mountpoint="/usr/lib/wsl/drivers"} 75.38
+filesystem_used_bytes{device="/dev/sdc",fstype="ext4",mountpoint="/"} 10.93
+filesystem_used_bytes{device="none",fstype="overlay",mountpoint="/usr/lib/wsl/lib"} 0
+filesystem_used_bytes{device="drvfs",fstype="9p",mountpoint="/mnt/c"} 75.38
+filesystem_used_bytes{device="/dev/sde",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop-data/isocache"} 1.08
+filesystem_used_bytes{device="/dev/sdd",fstype="ext4",mountpoint="/mnt/wsl/docker-desktop/docker-desktop-user-distro"} 0.01
+filesystem_used_bytes{device="/dev/loop0",fstype="iso9660",mountpoint="/mnt/wsl/docker-desktop/cli-tools"} 100
 ```
