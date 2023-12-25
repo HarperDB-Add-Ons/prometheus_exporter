@@ -1,4 +1,6 @@
 'use strict';
+
+const {fsSize} = require('systeminformation')
 const {hdb_analytics} = databases.system;
 const { analytics } = server.config;
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
@@ -68,7 +70,7 @@ module.exports = async (server, { hdbCore, logger }) => {
 
 			request.body = {
 				operation: 'system_information',
-				attributes: ['database_metrics', 'harperdb_processes', 'threads', 'disk']
+				attributes: ['database_metrics', 'harperdb_processes', 'threads']
 			};
 
 			let system_info = await hdbCore.requestWithoutAuthentication(request);
@@ -78,8 +80,9 @@ module.exports = async (server, { hdbCore, logger }) => {
 			if(system_info.harperdb_processes.core.length > 0){
 				harperdb_cpu_percentage_gauge.set({process_name: 'harperdb_core'}, system_info.harperdb_processes.core[0].cpu);
 			}
+			let sizes = await fsSize();
 
-			system_info.disk.size.forEach(device => {
+			sizes.forEach(device => {
 				filesystem_size_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.size);
 				filesystem_avail_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.available);
 				filesystem_used_bytes.set({device: device.fs, fstype: device.type, mountpoint: device.mount}, device.use);
