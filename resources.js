@@ -155,8 +155,9 @@ class metrics extends Resource {
       }
     }
 
-    let prom_results = await Prometheus.register.metrics();
+
     let output = await generateMetricsFromAnalytics();
+    let prom_results = await Prometheus.register.metrics();
 
     if(output.length > 0) {
       return output.join('\n') + '\n' + prom_results
@@ -191,6 +192,9 @@ async function generateMetricsFromAnalytics() {
         break;
       case 'mqtt-connections':
         open_connections_gauge.set({ protocol: 'mqtt'}, metric.count);
+        break;
+      case 'connections':
+        open_connections_gauge.set({ protocol: 'ws'}, metric.count);
         break;
       case 'bytes-sent':
         bytes_sent_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
