@@ -113,8 +113,9 @@ module.exports = async (server, { hdbCore, logger }) => {
 				}
 			}
 
-			let prom_results = await Prometheus.register.metrics();
 			let output = await generateMetricsFromAnalytics();
+			let prom_results = await Prometheus.register.metrics();
+
 			reply.type(Prometheus.register.contentType)
 
 			if(output.length > 0) {
@@ -143,6 +144,9 @@ async function generateMetricsFromAnalytics() {
 				break;
 			case 'mqtt-connections':
 				open_connections_gauge.set({ protocol: 'mqtt'}, metric.count);
+				break;
+			case 'connections':
+				open_connections_gauge.set({ protocol: 'ws'}, metric.count);
 				break;
 			case 'bytes-sent':
 				bytes_sent_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
