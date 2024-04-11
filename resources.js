@@ -168,7 +168,7 @@ class metrics extends Resource {
     let prom_results = await Prometheus.register.metrics();
 
     if(output.length > 0) {
-      return JSON(output.join('\n') + '\n' + prom_results)
+      return output.join('\n') + '\n' + prom_results
     } else {
       return prom_results;
     }
