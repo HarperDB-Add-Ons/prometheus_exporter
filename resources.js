@@ -16,8 +16,16 @@ const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePer
 const SETTINGS_PATH = join(__dirname, 'settings.json');
 
 import Prometheus from 'prom-client';
-
 Prometheus.collectDefaultMetrics();
+Prometheus.register.setContentType(
+  Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
+);
+contentTypes.set('application/openmetrics-text', {
+  serialize(data){
+    return data.toString();
+  },
+  q: 1,
+});
 
 const puts_gauge = new Prometheus.Gauge({name: 'harperdb_table_puts_total', help: 'Total number of non-delete writes by table', labelNames: ['database', 'table']})
 const deletes_gauge = new Prometheus.Gauge({name: 'harperdb_table_deletes_total', help: 'Total number of deletes by table', labelNames: ['database', 'table']})
@@ -160,7 +168,7 @@ class metrics extends Resource {
     let prom_results = await Prometheus.register.metrics();
 
     if(output.length > 0) {
-      return output.join('\n') + '\n' + prom_results
+      return JSON(output.join('\n') + '\n' + prom_results)
     } else {
       return prom_results;
     }
@@ -216,8 +224,6 @@ async function generateMetricsFromAnalytics() {
         output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
         output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
         output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-        //needs to be a new line after every metric
-        output.push('');
         break;
       case 'cache-resolution':
         //prometheus doesn't like hyphens in metric names
@@ -234,8 +240,6 @@ async function generateMetricsFromAnalytics() {
         output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
         output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
         output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
-        //needs to be a new line after every metric
-        output.push('');
         break;
       case 'cache-hit':
         cache_hits_gauge.set({table: metric.path}, metric.total);
@@ -259,7 +263,6 @@ async function generateMetricsFromAnalytics() {
         output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
         output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
         //needs to be a new line after every metric
-        output.push('');
         break;
       default:
         //outputCustomMetrics(metric, output);
@@ -284,8 +287,6 @@ function outputCustomMetrics(metric, output) {
       output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
       output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
       output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-      //needs to be a new line after every metric
-      output.push('');
     }
   })
 }
