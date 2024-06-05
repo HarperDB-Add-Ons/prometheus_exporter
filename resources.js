@@ -43,8 +43,10 @@ const harperdb_cpu_percentage_gauge =  new Prometheus.Gauge({name: 'harperdb_pro
 
 const connections_gauge = new Prometheus.Gauge({name: 'connection', help: 'Number of successful connection attempts by protocol', labelNames: ['protocol', 'type', 'action']});
 const open_connections_gauge = new Prometheus.Gauge({name: 'open_connections', help: 'Average number of connections across all threads', labelNames: ['protocol']});
-const bytes_sent_gauge = new Prometheus.Gauge({name: 'bytes_sent', help: 'Bytes sent by protocol', labelNames: ['protocol', 'action']});
-const bytes_received_gauge = new Prometheus.Gauge({name: 'bytes_received', help: 'Bytes received by protocol', labelNames: ['protocol', 'action']});
+const bytes_sent_gauge = new Prometheus.Gauge({name: 'bytes_sent', help: 'Bytes sent by protocol', labelNames: ['protocol', 'action', 'topic']});
+const messages_sent_gauge = new Prometheus.Gauge({name: 'messages_sent', help: 'Messages sent by protocol', labelNames: ['protocol', 'action', 'topic']});
+const bytes_received_gauge = new Prometheus.Gauge({name: 'bytes_received', help: 'Bytes received by protocol', labelNames: ['protocol', 'action', 'topic']});
+const messages_received_gauge = new Prometheus.Gauge({name: 'messages_received', help: 'Messages received by protocol', labelNames: ['protocol', 'action', 'topic']});
 const cache_hits_gauge = new Prometheus.Gauge({name: 'cache_hit', help: 'Number of cache hits by table', labelNames: ['table']});
 const cache_miss_gauge = new Prometheus.Gauge({name: 'cache_miss', help: 'Number of cache misses by table', labelNames: ['table']});
 const success_gauge = new Prometheus.Gauge({name: 'success', help: 'Number of success requests by endpoint', labelNames: ['path', 'type', 'method', 'label']});
@@ -199,16 +201,18 @@ async function generateMetricsFromAnalytics() {
         connections_gauge.set({ protocol: metric.path, action: metric.method, type: 'success' }, metric.count);
         break;
       case 'mqtt-connections':
-        open_connections_gauge.set({ protocol: 'mqtt'}, metric.count);
+        open_connections_gauge.set({ protocol: 'mqtt'}, metric.connections);
         break;
       case 'connections':
-        open_connections_gauge.set({ protocol: 'ws'}, metric.count);
+        open_connections_gauge.set({ protocol: 'ws'}, metric.connections);
         break;
       case 'bytes-sent':
-        bytes_sent_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
+        bytes_sent_gauge.set({ protocol: metric.type, action: metric.method, topic: metric.path}, metric.count * metric.mean);
+        messages_sent_gauge.set({ protocol: metric.type, action: metric.method, topic: metric.path}, metric.count);
         break;
       case 'bytes-received':
-        bytes_received_gauge.set({ protocol: metric.type, action: metric.method}, metric.count);
+        bytes_received_gauge.set({ protocol: metric.type, action: metric.method, topic: metric.path}, metric.count * metric.mean);
+        messages_received_gauge.set({ protocol: metric.type, action: metric.method, topic: metric.path}, metric.count);
         break;
       case 'TTFB':
       case 'duration':
