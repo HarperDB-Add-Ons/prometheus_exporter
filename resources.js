@@ -18,7 +18,7 @@ const SETTINGS_PATH = join(__dirname, 'settings.json');
 import Prometheus from 'prom-client';
 Prometheus.collectDefaultMetrics();
 Prometheus.register.setContentType(
-  Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
+    Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
 );
 contentTypes.set('application/openmetrics-text', {
   serialize(data){
@@ -43,6 +43,7 @@ const harperdb_cpu_percentage_gauge =  new Prometheus.Gauge({name: 'harperdb_pro
 
 const connections_gauge = new Prometheus.Gauge({name: 'connection', help: 'Number of successful connection attempts by protocol', labelNames: ['protocol', 'type', 'action']});
 const open_connections_gauge = new Prometheus.Gauge({name: 'open_connections', help: 'Average number of connections across all threads', labelNames: ['protocol']});
+const acl_fail_gauge = new Prometheus.Gauge({name: 'acl_fail', help: 'Number of failed ACL usages', labelNames: ['topic']});
 const bytes_sent_gauge = new Prometheus.Gauge({name: 'bytes_sent', help: 'Bytes sent by protocol', labelNames: ['protocol', 'action', 'topic']});
 const messages_sent_gauge = new Prometheus.Gauge({name: 'messages_sent', help: 'Messages sent by protocol', labelNames: ['protocol', 'action', 'topic']});
 const bytes_received_gauge = new Prometheus.Gauge({name: 'bytes_received', help: 'Bytes received by protocol', labelNames: ['protocol', 'action', 'topic']});
@@ -110,6 +111,7 @@ class metrics extends Resource {
 
     connections_gauge.reset();
     open_connections_gauge.reset();
+    acl_fail_gauge.reset();
     bytes_sent_gauge.reset();
     cache_hits_gauge.reset();
     cache_miss_gauge.reset();
@@ -152,16 +154,16 @@ class metrics extends Resource {
       for (const [table_name, table_metrics] of Object.entries(table_object)) {
         const labels = { database: database_name, table: table_name };
 
-        puts_gauge.set(labels, table_metrics.puts);
-        deletes_gauge.set(labels, table_metrics.deletes);
-        txns_gauge.set(labels, table_metrics.txns);
-        page_flushes_gauge.set(labels, table_metrics.pageFlushes);
-        writes_gauge.set(labels, table_metrics.writes);
-        pages_written_gauge.set(labels, table_metrics.pagesWritten);
-        time_during_txns_gauge.set(labels, table_metrics.timeDuringTxns);
-        time_start_txns_gauge.set(labels, table_metrics.timeStartTxns);
-        time_page_flushes_gauge.set(labels, table_metrics.timePageFlushes);
-        time_sync_gauge.set(labels, table_metrics.timeSync);
+        puts_gauge.set(labels, table_metrics.puts ? table_metrics.puts : 0);
+        deletes_gauge.set(labels, table_metrics.deletes ? table_metrics.deletes : 0);
+        txns_gauge.set(labels, table_metrics.txns ? table_metrics.txns : 0);
+        page_flushes_gauge.set(labels, table_metrics.pageFlushes ? table_metrics.pageFlushes : 0);
+        writes_gauge.set(labels, table_metrics.writes ? table_metrics.writes : 0);
+        pages_written_gauge.set(labels, table_metrics.pagesWritten ? table_metrics.pagesWritten : 0);
+        time_during_txns_gauge.set(labels, table_metrics.timeDuringTxns ? table_metrics.timeDuringTxns : 0);
+        time_start_txns_gauge.set(labels, table_metrics.timeStartTxns ? table_metrics.timeStartTxns : 0);
+        time_page_flushes_gauge.set(labels, table_metrics.timePageFlushes ? table_metrics.timePageFlushes : 0);
+        time_sync_gauge.set(labels, table_metrics.timeSync ? table_metrics.timeSync : 0);
       }
     }
 
@@ -197,11 +199,15 @@ async function generateMetricsFromAnalytics() {
   for await (const metric of results) {
     switch (metric.metric) {
       case 'connection':
-        connections_gauge.set({ protocol: metric.path, action: metric.method,  type: 'total'}, metric.total);
-        connections_gauge.set({ protocol: metric.path, action: metric.method, type: 'success' }, metric.count);
+        connections_gauge.set({ protocol: metric.path, action: metric.method,  type: 'total'}, metric.count);
+        connections_gauge.set({ protocol: metric.path, action: metric.method, type: 'success' }, metric.total);
+        connections_gauge.set({ protocol: metric.path, action: metric.method, type: 'failed' }, metric.count - metric.total);
         break;
       case 'mqtt-connections':
         open_connections_gauge.set({ protocol: 'mqtt'}, metric.connections);
+        break;
+      case 'acl-fail':
+        acl_fail_gauge.set({ topic: metric.path }, metric.total);
         break;
       case 'connections':
         open_connections_gauge.set({ protocol: 'ws'}, metric.connections);
