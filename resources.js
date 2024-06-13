@@ -154,16 +154,16 @@ class metrics extends Resource {
       for (const [table_name, table_metrics] of Object.entries(table_object)) {
         const labels = { database: database_name, table: table_name };
 
-        puts_gauge.set(labels, table_metrics.puts ? table_metrics.puts : 0);
-        deletes_gauge.set(labels, table_metrics.deletes ? table_metrics.deletes : 0);
-        txns_gauge.set(labels, table_metrics.txns ? table_metrics.txns : 0);
-        page_flushes_gauge.set(labels, table_metrics.pageFlushes ? table_metrics.pageFlushes : 0);
-        writes_gauge.set(labels, table_metrics.writes ? table_metrics.writes : 0);
-        pages_written_gauge.set(labels, table_metrics.pagesWritten ? table_metrics.pagesWritten : 0);
-        time_during_txns_gauge.set(labels, table_metrics.timeDuringTxns ? table_metrics.timeDuringTxns : 0);
-        time_start_txns_gauge.set(labels, table_metrics.timeStartTxns ? table_metrics.timeStartTxns : 0);
-        time_page_flushes_gauge.set(labels, table_metrics.timePageFlushes ? table_metrics.timePageFlushes : 0);
-        time_sync_gauge.set(labels, table_metrics.timeSync ? table_metrics.timeSync : 0);
+        puts_gauge.set(labels, table_metrics.puts ?? 0);
+        deletes_gauge.set(labels, table_metrics.deletes ?? 0);
+        txns_gauge.set(labels, table_metrics.txns ?? 0);
+        page_flushes_gauge.set(labels, table_metrics.pageFlushes ?? 0);
+        writes_gauge.set(labels, table_metrics.writes ?? 0);
+        pages_written_gauge.set(labels, table_metrics.pagesWritten ?? 0);
+        time_during_txns_gauge.set(labels, table_metrics.timeDuringTxns ?? 0);
+        time_start_txns_gauge.set(labels, table_metrics.timeStartTxns ?? 0);
+        time_page_flushes_gauge.set(labels, table_metrics.timePageFlushes ?? 0);
+        time_sync_gauge.set(labels, table_metrics.timeSync ?? 0);
       }
     }
 
