@@ -1,7 +1,6 @@
 import {fsSize} from 'systeminformation'
 const {hdb_analytics} = databases.system;
 const { analytics } = server.config;
-import fs from 'fs';
 import {join, basename} from 'path';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,15 +58,6 @@ const filesystem_avail_bytes = new Prometheus.Gauge({name: 'filesystem_free_byte
 const filesystem_used_bytes = new Prometheus.Gauge({name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
 
 
-
-class Settings {
-  constructor() {
-    this.forceAuthorization = true;
-    this.allowedUsers = [];
-    this.customMetrics = []
-  }
-}
-
 class CustomMetricSetting {
   constructor() {
     this.name = "";
@@ -80,7 +70,7 @@ if (server.workerIndex == 0) {
   (async () => {
 
     if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({name: "forceAuthorization", value: "false"})
+      PrometheusExporterSettings.put({name: "forceAuthorization", value: false})
       PrometheusExporterSettings.put({name: "allowedUsers", value: []})
       PrometheusExporterSettings.put({name: "customMetrics", value: []})
     }
@@ -88,13 +78,14 @@ if (server.workerIndex == 0) {
 }
 class metrics extends Resource {
   async allowRead(user) {
-    forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
+    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
+
 
     if(forceAuthorization !== true) {
       return true;
     }
 
-    allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
+    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
     if(allowedUsers.length > 0) {
       return allowedUsers.some(allow_user=>{
         return allow_user === user?.username;
@@ -310,25 +301,7 @@ function outputCustomMetrics(metric, output) {
   })
 }
 
-class settings extends Resource {
-
-  allowRead(user) {
-    return user?.role?.role === 'super_user';
-  }
-  allowCreate(user) {
-    return user?.role?.role === 'super_user';
-  }
-
-  async get() {
-    return getSettings();
-  }
-  async post(data) {
-    await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(data));
-  }
-}
-
 export const prometheus_exporter = {
   metrics,
-  settings,
   PrometheusExporterSettings
 }
