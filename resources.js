@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-const { PrometheusExporterSettings } = pes
+const { PrometheusExporterSettings } = tables;
 let SETTINGS;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
@@ -79,22 +79,22 @@ class CustomMetricSetting {
 if (server.workerIndex == 0) {
   (async () => {
 
-    if (pes.getRecordCount({ exactCount: false }).recordCount === 0) {
-      pes.put({name: "forceAuthorization", value: "false"})
-      pes.put({name: "allowedUsers", value: []})
-      pes.put({name: "customMetrics", value: []})
+    if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
+      PrometheusExporterSettings.put({name: "forceAuthorization", value: "false"})
+      PrometheusExporterSettings.put({name: "allowedUsers", value: []})
+      PrometheusExporterSettings.put({name: "customMetrics", value: []})
     }
   })();
 }
 class metrics extends Resource {
   async allowRead(user) {
-    forceAuthorization = (await pes.get('forceAuthorization')).value
+    forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
 
     if(forceAuthorization !== true) {
       return true;
     }
 
-    allowedUsers = (await pes.get('allowedUsers')).value
+    allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
     if(allowedUsers.length > 0) {
       return allowedUsers.some(allow_user=>{
         return allow_user === user?.username;
