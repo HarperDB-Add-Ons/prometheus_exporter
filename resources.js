@@ -9,6 +9,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
+
+const { PrometheusExporterSettings } = pes
 let SETTINGS;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
@@ -76,23 +78,30 @@ class CustomMetricSetting {
 if (server.workerIndex == 0) {
   (async () => {
 
-    if (!fs.existsSync(SETTINGS_PATH)) {
-      fs.writeFileSync(SETTINGS_PATH, JSON.stringify(new Settings()));
+    if (pes.getRecordCount({ exactCount: false }).recordCount === 0) {
+      pes.put({name: "forceAuthorization", value: "false"})
+      pes.put({name: "allowedUsers", value: []})
+      pes.put({name: "customMetrics", value: []})
     }
   })();
 }
 class metrics extends Resource {
-  allowRead(user) {
-    if(getSettings()?.forceAuthorization !== true)
-      return true;
+  async allowRead(user) {
+    forceAuthorization = (await pes.get('forceAuthorization')).value
 
-    if(getSettings()?.allowedUsers && getSettings()?.allowedUsers.length > 0) {
-      return getSettings().allowedUsers.some(allow_user=>{
+    if(forceAuthorization !== true) {
+      return true;
+    }
+
+    allowedUsers = (await pes.get('allowedUsers')).value
+    if(allowedUsers.length > 0) {
+      return allowedUsers.some(allow_user=>{
         return allow_user === user?.username;
       });
     } else
       return user?.role?.role === 'super_user';
   }
+
   async get() {
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
     puts_gauge.reset();
@@ -314,5 +323,6 @@ class settings extends Resource {
 
 export const prometheus_exporter = {
   metrics,
-  settings
+  settings,
+  pes
 }
