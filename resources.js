@@ -330,5 +330,5 @@ class settings extends Resource {
 export const prometheus_exporter = {
   metrics,
   settings,
-  pes
+  PrometheusExporterSettings
 }
