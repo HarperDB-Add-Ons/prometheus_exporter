@@ -43,6 +43,31 @@ scrape_configs:
 ```
 We define a custom `metrics_path` to tell Prometheus where to access the HarperDB Exporter path.  You can also see we added a label for our target, we recommend doing similar for your configuration to allow for filtering between instance metrics.
 
+## Exporter Settings
+Metric access is controlled by two settings that can be configured using the [REST](https://docs.harperdb.io/docs/developers/rest) endpoint for `prometheus_exporter/PrometheusExporterSettings`. The user used to authenticate these REST requests must have write access to the table `PrometheusExporterSettings`:
+1. `forceAuthorization`
+  * `true` or `false`. If true, you must authenticate with HarperDB in order to access the metrics endpoint `/prometheus_exporter/metrics`
+2. `authorizedUsers`
+  * Array of Username (HarperDB users) strings. Only used if `forceAuthorization` is `true`. If empty, the user used to authenticate must be a `super_user`. If there are any strings in the array, those users will be authorized to access as well as any super users.
+
+### Example REST commands
+```bash
+curl --location --request PUT 'http://localhost:9926/prometheus_exporter/PrometheusExporterSettings/forceAuthorization' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic abcd' \
+--data '{
+    "value": true
+}'
+```
+
+```bash
+curl --location --request PUT 'http://localhost:9926/prometheus_exporter/PrometheusExporterSettings/allowedUsers' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Basic abcd' \
+--data '{
+    "value": ["prometheus"]
+}'
+```
 ## Metrics
 We expose default metrics from the [Prometheus client](https://github.com/siimon/prom-client); a list of the metrics can be found [here](https://github.com/siimon/prom-client/blob/master/example/default-metrics.js).
 

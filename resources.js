@@ -1,19 +1,14 @@
 import {fsSize} from 'systeminformation'
 const {hdb_analytics} = databases.system;
 const { analytics } = server.config;
-import fs from 'fs';
-import {join, basename} from 'path';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-let SETTINGS;
+
+const { PrometheusExporterSettings } = tables;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
 
-const SETTINGS_PATH = join(__dirname, 'settings.json');
 
 import Prometheus from 'prom-client';
 Prometheus.collectDefaultMetrics();
@@ -56,44 +51,35 @@ const filesystem_size_bytes = new Prometheus.Gauge({name: 'filesystem_size_bytes
 const filesystem_avail_bytes = new Prometheus.Gauge({name: 'filesystem_free_bytes', help: 'Filesystem free space in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
 const filesystem_used_bytes = new Prometheus.Gauge({name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
 
-
-
-class Settings {
-  constructor() {
-    this.forceAuthorization = true;
-    this.allowedUsers = [];
-    this.customMetrics = []
-  }
-}
-
-class CustomMetricSetting {
-  constructor() {
-    this.name = "";
-    this.helpText = "";
-  }
-}
-
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
   (async () => {
 
-    if (!fs.existsSync(SETTINGS_PATH)) {
-      fs.writeFileSync(SETTINGS_PATH, JSON.stringify(new Settings()));
+    if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
+      PrometheusExporterSettings.put({name: "forceAuthorization", value: false})
+      PrometheusExporterSettings.put({name: "allowedUsers", value: []})
+      PrometheusExporterSettings.put({name: "customMetrics", value: []})
     }
   })();
 }
 class metrics extends Resource {
-  allowRead(user) {
-    if(getSettings()?.forceAuthorization !== true)
-      return true;
+  async allowRead(user) {
+    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
 
-    if(getSettings()?.allowedUsers && getSettings()?.allowedUsers.length > 0) {
-      return getSettings().allowedUsers.some(allow_user=>{
+
+    if(forceAuthorization !== true) {
+      return true;
+    }
+
+    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
+    if(allowedUsers.length > 0) {
+      return allowedUsers.some(allow_user=>{
         return allow_user === user?.username;
       });
     } else
       return user?.role?.role === 'super_user';
   }
+
   async get() {
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
     puts_gauge.reset();
@@ -177,14 +163,6 @@ class metrics extends Resource {
       return prom_results;
     }
   }
-}
-
-function getSettings() {
-  if(SETTINGS === undefined) {
-    SETTINGS = require(SETTINGS_PATH);
-  }
-
-  return SETTINGS;
 }
 
 async function generateMetricsFromAnalytics() {
@@ -282,8 +260,9 @@ async function generateMetricsFromAnalytics() {
   return output;
 }
 
-function outputCustomMetrics(metric, output) {
-  getSettings().customMetrics.forEach(custom_metric=>{
+async function outputCustomMetrics(metric, output) {
+  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
+  customMetrics.forEach(custom_metric=>{
     if(metric.name === custom_metric.name) {
       output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
       output.push(`# TYPE ${metric.metric} summary`);
@@ -301,24 +280,7 @@ function outputCustomMetrics(metric, output) {
   })
 }
 
-class settings extends Resource {
-
-  allowRead(user) {
-    return user?.role?.role === 'super_user';
-  }
-  allowCreate(user) {
-    return user?.role?.role === 'super_user';
-  }
-
-  async get() {
-    return getSettings();
-  }
-  async post(data) {
-    await fs.promises.writeFile(SETTINGS_PATH, JSON.stringify(data));
-  }
-}
-
 export const prometheus_exporter = {
   metrics,
-  settings
+  PrometheusExporterSettings
 }
