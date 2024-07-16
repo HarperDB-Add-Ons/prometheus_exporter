@@ -1,20 +1,14 @@
 import {fsSize} from 'systeminformation'
 const {hdb_analytics} = databases.system;
 const { analytics } = server.config;
-import {join, basename} from 'path';
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
 const { PrometheusExporterSettings } = tables;
-let SETTINGS;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
 
-const SETTINGS_PATH = join(__dirname, 'settings.json');
 
 import Prometheus from 'prom-client';
 Prometheus.collectDefaultMetrics();
@@ -56,14 +50,6 @@ const success_gauge = new Prometheus.Gauge({name: 'success', help: 'Number of su
 const filesystem_size_bytes = new Prometheus.Gauge({name: 'filesystem_size_bytes', help: 'Filesystem size in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
 const filesystem_avail_bytes = new Prometheus.Gauge({name: 'filesystem_free_bytes', help: 'Filesystem free space in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
 const filesystem_used_bytes = new Prometheus.Gauge({name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint']})
-
-
-class CustomMetricSetting {
-  constructor() {
-    this.name = "";
-    this.helpText = "";
-  }
-}
 
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
@@ -179,14 +165,6 @@ class metrics extends Resource {
   }
 }
 
-function getSettings() {
-  if(SETTINGS === undefined) {
-    SETTINGS = require(SETTINGS_PATH);
-  }
-
-  return SETTINGS;
-}
-
 async function generateMetricsFromAnalytics() {
   const end_at = Date.now();
   const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
@@ -282,8 +260,9 @@ async function generateMetricsFromAnalytics() {
   return output;
 }
 
-function outputCustomMetrics(metric, output) {
-  getSettings().customMetrics.forEach(custom_metric=>{
+async function outputCustomMetrics(metric, output) {
+  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
+  customMetrics.forEach(custom_metric=>{
     if(metric.name === custom_metric.name) {
       output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
       output.push(`# TYPE ${metric.metric} summary`);
