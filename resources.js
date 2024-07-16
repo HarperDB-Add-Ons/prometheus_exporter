@@ -56,7 +56,7 @@ if (server.workerIndex == 0) {
   (async () => {
 
     if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({name: "forceAuthorization", value: false})
+      PrometheusExporterSettings.put({name: "forceAuthorization", value: true})
       PrometheusExporterSettings.put({name: "allowedUsers", value: []})
       PrometheusExporterSettings.put({name: "customMetrics", value: []})
     }
