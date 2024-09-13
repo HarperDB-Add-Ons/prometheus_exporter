@@ -78,7 +78,7 @@ Metrics specific to HarperDB (all metrics are [Gauges](https://prometheus.io/doc
 | `harperdb_table_puts_total` | Total number of non-delete writes by table.                                                                                                                      |
 | `harperdb_table_deletes_total` | Total number of deletes by table.                                                                                                                                |
 | `harperdb_table_txns_total` | Total number of transactions by table.                                                                                                                           |
-| `harperdb_table_page_flushes_total` | Total number of times all pages are flushed by table.                                                                                                            |
+| `harperdb_table_page_flushes_total` |The total number of times all pages have been flushed for a table. HarperDB batches writes to disk for better performance, and this metric tracks how many times these batch writes have occurred at the disk level|
 | `harperdb_table_writes_total` | Total number of disk write operations by table.                                                                                                                  |
 | `harperdb_table_pages_written_total` | Total number of pages written to disk by table. This is higher than writes because sequential pages can be written in a single write operation.                  |
 | `harperdb_table_time_during_txns_total` | Total time from when transaction was started (lock acquired) until finished and all writes have been made (but not necessarily flushed/synced to disk) by table. |
@@ -96,7 +96,7 @@ Metrics specific to HarperDB (all metrics are [Gauges](https://prometheus.io/doc
 | `success` | Number of success requests by endpoint                                                                                                                           |
 | `duration` | Time for HarperDB to execute request in ms                                                                                                                       |
 | `cache_resolution` | Time to resolve a cache miss                                                                                                                                     |
-| `transfer` | Total amount of time spent transferring the contents of a response (ms)                                                                                          |
+| `transfer` | Total time spent transferring the response (in ms), from the first header packet to the final packet. HarperDB honors "back-pressure," so if the client/network is slow, transfer is paced to prevent buffer overload. This reflects how long it takes to deliver larger responses                                                                                     |
 | `filesystem_size_bytes` | Filesystem size in bytes. |
 | `filesystem_free_bytes` | Filesystem free space in bytes. |
 | `filesystem_used_bytes` | Filesystem space used in bytes. |
