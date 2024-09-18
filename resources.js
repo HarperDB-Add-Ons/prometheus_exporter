@@ -117,10 +117,11 @@ class metrics extends Resource {
 
     let system_info = await hdb_analytics.operation(operation);
 
-    thread_count_gauge.set(system_info.threads.length);
+    gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
 
-    if (system_info.harperdb_processes.core.length > 0) {
-      harperdb_cpu_percentage_gauge.set({ process_name: 'harperdb_core' }, system_info.harperdb_processes.core[0].cpu);
+    if (system_info?.harperdb_processes?.core?.length > 0) {
+      gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
+        system_info?.harperdb_processes?.core[0]?.cpu);
     }
     let sizes = await fsSize();
 
@@ -134,14 +135,14 @@ class metrics extends Resource {
     });
 
     system_info.harperdb_processes.clustering.forEach(process_data => {
-      if (process_data.params.endsWith('hub.json')) {
+      if (process_data?.params?.endsWith('hub.json')) {
         gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
-      } else if (process_data.params.endsWith('leaf.json')) {
+      } else if (process_data?.params?.endsWith('leaf.json')) {
         gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
       }
     });
 
-    for (const [database_name, table_object] of Object.entries(system_info.metrics)) {
+    for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
       for (const [table_name, table_metrics] of Object.entries(table_object)) {
         const labels = { database: database_name, table: table_name };
 
@@ -162,7 +163,7 @@ class metrics extends Resource {
     let prom_results = await Prometheus.register.metrics();
 
     if (output.length > 0) {
-      return output.join('\n') + '\n' + prom_results
+      return output.join('\n') + '\n' + prom_results;
     } else {
       return prom_results;
     }
@@ -181,95 +182,97 @@ async function generateMetricsFromAnalytics() {
   let output = [];
 
   for await (const metric of results) {
-    switch (metric.metric) {
-      case 'connection':
-        gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
-          metric.count);
-        gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
-          metric.total);
-        gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
-          metric.count - metric.total);
-        break;
-      case 'mqtt-connections':
-        gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
-        break;
-      case 'acl-fail':
-        gaugeSet(acl_fail_gauge, { topic: metric.path }, metric.total);
-        break;
-      case 'connections':
-        gaugeSet(open_connections_gauge, { protocol: 'ws' }, metric.connections);
-        break;
-      case 'bytes-sent':
-        gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-          metric.count * metric.mean);
-        gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-          metric.count);
-        break;
-      case 'bytes-received':
-        gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-          metric.count * metric.mean);
-        gaugeSet(messages_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-          metric.count);
-        break;
-      case 'TTFB':
-      case 'duration':
-        output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
-        output.push(`# TYPE ${metric.metric} summary`);
-        output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-        output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-        output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-        output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-        output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-        output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-        output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-        output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-        output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-        output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-        break;
-      case 'cache-resolution':
-        //prometheus doesn't like hyphens in metric names
-        let metric_name = 'cache_resolution';
-        output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
-        output.push(`# TYPE ${metric_name} summary`);
-        output.push(`${metric_name}{quantile="0.01",table="${metric.path}"} ${metric.p1}`);
-        output.push(`${metric_name}{quantile="0.10",table="${metric.path}"} ${metric.p10}`);
-        output.push(`${metric_name}{quantile="0.25",table="${metric.path}"} ${metric.p25}`);
-        output.push(`${metric_name}{quantile="0.50",table="${metric.path}"} ${metric.median}`);
-        output.push(`${metric_name}{quantile="0.75",table="${metric.path}"} ${metric.p75}`);
-        output.push(`${metric_name}{quantile="0.90",table="${metric.path}"} ${metric.p90}`);
-        output.push(`${metric_name}{quantile="0.95",table="${metric.path}"} ${metric.p95}`);
-        output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
-        output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
-        output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
-        break;
-      case 'cache-hit':
-        gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
-        gaugeSet(cache_miss_gauge, { table: metric.path }, metric.count - metric.total);
-        break;
-      case 'success':
-        gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'total' },
-          metric.total);
-        gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'success' },
-          metric.count);
-        break;
-      case 'transfer':
-        output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
-        output.push(`# TYPE ${metric.metric} summary`);
-        output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-        output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-        output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-        output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-        output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-        output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-        output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-        output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-        output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-        output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-        //needs to be a new line after every metric
-        break;
-      default:
-        //outputCustomMetrics(metric, output);
-        break;
+    if (metric) {
+      switch (metric?.metric) {
+        case 'connection':
+          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
+            metric.count);
+          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
+            metric.total);
+          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
+            metric?.count - metric?.total);
+          break;
+        case 'mqtt-connections':
+          gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
+          break;
+        case 'acl-fail':
+          gaugeSet(acl_fail_gauge, { topic: metric.path }, metric.total);
+          break;
+        case 'connections':
+          gaugeSet(open_connections_gauge, { protocol: 'ws' }, metric.connections);
+          break;
+        case 'bytes-sent':
+          gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+            metric.count * metric.mean);
+          gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+            metric.count);
+          break;
+        case 'bytes-received':
+          gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+            metric.count * metric.mean);
+          gaugeSet(messages_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+            metric.count);
+          break;
+        case 'TTFB':
+        case 'duration':
+          output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
+          output.push(`# TYPE ${metric.metric} summary`);
+          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+          break;
+        case 'cache-resolution':
+          //prometheus doesn't like hyphens in metric names
+          let metric_name = 'cache_resolution';
+          output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
+          output.push(`# TYPE ${metric_name} summary`);
+          output.push(`${metric_name}{quantile="0.01",table="${metric.path}"} ${metric.p1}`);
+          output.push(`${metric_name}{quantile="0.10",table="${metric.path}"} ${metric.p10}`);
+          output.push(`${metric_name}{quantile="0.25",table="${metric.path}"} ${metric.p25}`);
+          output.push(`${metric_name}{quantile="0.50",table="${metric.path}"} ${metric.median}`);
+          output.push(`${metric_name}{quantile="0.75",table="${metric.path}"} ${metric.p75}`);
+          output.push(`${metric_name}{quantile="0.90",table="${metric.path}"} ${metric.p90}`);
+          output.push(`${metric_name}{quantile="0.95",table="${metric.path}"} ${metric.p95}`);
+          output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
+          output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
+          output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
+          break;
+        case 'cache-hit':
+          gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
+          gaugeSet(cache_miss_gauge, { table: metric.path }, metric.count - metric.total);
+          break;
+        case 'success':
+          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'total' },
+            metric.total);
+          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'success' },
+            metric.count);
+          break;
+        case 'transfer':
+          output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
+          output.push(`# TYPE ${metric.metric} summary`);
+          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+          //needs to be a new line after every metric
+          break;
+        default:
+          //outputCustomMetrics(metric, output);
+          break;
+      }
     }
   }
   return output;
@@ -281,7 +284,7 @@ const gaugeSet = (gauge, options, value) => gauge?.set(options, value || 0);
 async function outputCustomMetrics(metric, output) {
   let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
   customMetrics.forEach(custom_metric => {
-    if (metric.name === custom_metric.name) {
+    if (metric?.name === custom_metric?.name) {
       output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
       output.push(`# TYPE ${metric.metric} summary`);
       output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
