@@ -15,7 +15,7 @@ import Prometheus from 'prom-client';
 
 Prometheus.collectDefaultMetrics();
 Prometheus.register.setContentType(
-  Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
+    Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
 );
 contentTypes.set('application/openmetrics-text', {
   serialize(data) {
@@ -121,17 +121,17 @@ class metrics extends Resource {
 
     if (system_info?.harperdb_processes?.core?.length > 0) {
       gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
-        system_info?.harperdb_processes?.core[0]?.cpu);
+          system_info?.harperdb_processes?.core[0]?.cpu);
     }
     let sizes = await fsSize();
 
     sizes.forEach(device => {
       gaugeSet(filesystem_size_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.size);
+          device.size);
       gaugeSet(filesystem_avail_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.available);
+          device.available);
       gaugeSet(filesystem_used_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.use);
+          device.use);
     });
 
     system_info.harperdb_processes.clustering.forEach(process_data => {
@@ -181,16 +181,18 @@ async function generateMetricsFromAnalytics() {
 
   let output = [];
 
+  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
+
   for await (const metric of results) {
     if (metric) {
       switch (metric?.metric) {
         case 'connection':
           gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
-            metric.count);
+              metric.count);
           gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
-            metric.total);
+              metric.total);
           gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
-            metric?.count - metric?.total);
+              metric?.count - metric?.total);
           break;
         case 'mqtt-connections':
           gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
@@ -203,15 +205,15 @@ async function generateMetricsFromAnalytics() {
           break;
         case 'bytes-sent':
           gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
+              metric.count * metric.mean);
           gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
+              metric.count);
           break;
         case 'bytes-received':
           gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
+              metric.count * metric.mean);
           gaugeSet(messages_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
+              metric.count);
           break;
         case 'TTFB':
         case 'duration':
@@ -250,9 +252,9 @@ async function generateMetricsFromAnalytics() {
           break;
         case 'success':
           gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'total' },
-            metric.total);
+              metric.total);
           gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'success' },
-            metric.count);
+              metric.count);
           break;
         case 'transfer':
           output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
@@ -270,7 +272,7 @@ async function generateMetricsFromAnalytics() {
           //needs to be a new line after every metric
           break;
         default:
-          //outputCustomMetrics(metric, output);
+          await outputCustomMetrics(customMetrics, metric, output);
           break;
       }
     }
@@ -281,24 +283,35 @@ async function generateMetricsFromAnalytics() {
 // Call set() function on any gauge object with a default value of 0
 const gaugeSet = (gauge, options, value) => gauge?.set(options, value || 0);
 
-async function outputCustomMetrics(metric, output) {
-  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
+async function outputCustomMetrics(customMetrics, metric, output) {
   customMetrics.forEach(custom_metric => {
-    if (metric?.name === custom_metric?.name) {
-      output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
-      output.push(`# TYPE ${metric.metric} summary`);
-      output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-      output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-      output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-      output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-      output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-      output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-      output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-      output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-      output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-      output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+    const customMetricName = custom_metric.get('name');
+    if (metric[custom_metric.get('metricAttribute')] === customMetricName ) {
+      output.push(`# HELP ${customMetricName} ${custom_metric.help}`);
+      output.push(`# TYPE ${customMetricName} summary`);
+
+      const labels = buildCustomLabels(custom_metric, metric);
+
+      output.push(`${customMetricName}{quantile="0.01",${labels}} ${metric.p1 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.10",${labels}} ${metric.p10 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.25",${labels}} ${metric.p25 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.50",${labels}} ${metric.median ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.75",${labels}} ${metric.p75 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.90",${labels}} ${metric.p90 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.95",${labels}} ${metric.p95 ?? 0}`);
+      output.push(`${customMetricName}{quantile="0.99",${labels}} ${metric.p99 ?? 0}`);
+      output.push(`${customMetricName}_sum{${labels}} ${((metric.mean ?? 0) * (metric.count ?? 0))}`);
+      output.push(`${customMetricName}_count{${labels}} ${metric.count}`);
     }
   })
+}
+
+function buildCustomLabels(custom_metric, metric) {
+  let labels = [];
+  custom_metric.get('labels').forEach(label => {
+    labels.push(`${label.label}="${metric[label.metricAttribute]}"`);
+  });
+  return labels.join(',');
 }
 
 export const prometheus_exporter = {
