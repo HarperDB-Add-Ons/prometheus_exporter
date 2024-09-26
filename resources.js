@@ -25,7 +25,6 @@ contentTypes.set('application/openmetrics-text', {
   q: 1,
 });
 
-const table_record_count_gauge = new Prometheus.Gauge({ name: 'harperdb_table_record_count', help: 'Number of records by table', labelNames: ['database', 'table'] });
 const puts_gauge = new Prometheus.Gauge({ name: 'harperdb_table_puts_total', help: 'Total number of non-delete writes by table', labelNames: ['database', 'table'] });
 const deletes_gauge = new Prometheus.Gauge({ name: 'harperdb_table_deletes_total', help: 'Total number of deletes by table', labelNames: ['database', 'table'] });
 const txns_gauge = new Prometheus.Gauge({ name: 'harperdb_table_txns_total', help: 'Total number of transactions by table', labelNames: ['database', 'table'] });
@@ -120,7 +119,7 @@ class metrics extends Resource {
 
     const system_info = await hdb_analytics.operation({
       operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'threads']
+      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads']
     });
 
     gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
@@ -166,15 +165,6 @@ class metrics extends Resource {
       cluster_info.nodes?.forEach(node => {
         gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
       });
-    }
-
-    // Table record count
-    for (const database of Object.keys(databases)) {
-      const describe_db_info = await hdb_analytics.operation({ operation: 'describe_database', database });
-      for (const table of Object.values(describe_db_info)) {
-        gaugeSet(table_record_count_gauge,
-          { database: table.schema, table: table.name }, table.record_count || 0);
-      }
     }
 
     for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
