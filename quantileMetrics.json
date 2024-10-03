@@ -1,0 +1,12 @@
+[
+	{
+		"name": "transfer",
+		"help": "Time to transfer request (ms)",
+		"labelNames":
+		[
+			"type",
+			"path",
+			"method"
+		]
+	}
+]

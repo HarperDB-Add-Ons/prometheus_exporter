@@ -1,359 +1,232 @@
-import { fsSize } from 'systeminformation'
-
-const { hdb_analytics } = databases.system;
-const { analytics } = server.config;
-
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-
-const { PrometheusExporterSettings } = tables;
-
-const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
-const QUANTILE_LEVELS = [.01, .1, .25, .5, .75, .9, .95, .99];
-
+import { fsSize } from 'systeminformation';
+import { createRequire } from 'module';
 import Prometheus from 'prom-client';
 
-Prometheus.collectDefaultMetrics();
-Prometheus.register.setContentType(
-  Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
-);
-contentTypes.set('application/openmetrics-text', {
-  serialize(data) {
-    return data.toString();
-  },
-  q: 1,
-});
+const require = createRequire(import.meta.url);
+const { hdb_analytics } = databases.system;
+const { analytics } = server.config;
+const { PrometheusExporterSettings } = tables;
+const gaugeData = require('./gauges.json');
+const AGGREGATE_PERIOD_MS = (analytics?.aggregatePeriod || 600) * 1000;
+const QUANTILE_LEVELS = [.01, .1, .25, .5, .75, .9, .95, .99];
+const gauges = [];
 
-const puts_gauge = new Prometheus.Gauge({ name: 'harperdb_table_puts_total', help: 'Total number of non-delete writes by table', labelNames: ['database', 'table'] });
-const deletes_gauge = new Prometheus.Gauge({ name: 'harperdb_table_deletes_total', help: 'Total number of deletes by table', labelNames: ['database', 'table'] });
-const txns_gauge = new Prometheus.Gauge({ name: 'harperdb_table_txns_total', help: 'Total number of transactions by table', labelNames: ['database', 'table'] });
-const page_flushes_gauge = new Prometheus.Gauge({ name: 'harperdb_table_page_flushes_total', help: 'Total number of times all pages are flushed by table', labelNames: ['database', 'table'] });
-const writes_gauge = new Prometheus.Gauge({ name: 'harperdb_table_writes_total', help: 'Total number of disk write operations by table', labelNames: ['database', 'table'] });
-const pages_written_gauge = new Prometheus.Gauge({ name: 'harperdb_table_pages_written_total', help: 'Total number of pages written to disk by table. This is higher than writes because sequential pages can be written in a single write operation.', labelNames: ['database', 'table'] });
-const time_during_txns_gauge = new Prometheus.Gauge({ name: 'harperdb_table_time_during_txns_total', help: 'Total time from when transaction was started (lock acquired) until finished and all writes have been made (but not necessarily flushed/synced to disk) by table', labelNames: ['database', 'table'] });
-const time_start_txns_gauge = new Prometheus.Gauge({ name: 'harperdb_table_time_start_txns_total', help: 'Total time spent waiting for transaction lock acquisition by table', labelNames: ['database', 'table'] });
-const time_page_flushes_gauge = new Prometheus.Gauge({ name: 'harperdb_table_time_page_flushes_total', help: 'Total time spent on write calls by table', labelNames: ['database', 'table'] });
-const time_sync_gauge = new Prometheus.Gauge({ name: 'harperdb_table_time_sync_total', help: 'Total time spent waiting for writes to sync/flush to disk by table', labelNames: ['database', 'table'] });
+const init = async () => {
+	console.log('Starting Prometheus exporter');
+	await Prometheus.collectDefaultMetrics();
+	await Prometheus.register.setContentType(Prometheus.Registry.OPENMETRICS_CONTENT_TYPE);
+	contentTypes.set('application/openmetrics-text', {
+		serialize(data) {
+			data.toString();
+		},
+		q: 1
+	});
 
-const thread_count_gauge = new Prometheus.Gauge({ name: 'harperdb_process_threads_count', help: 'Number of threads in the HarperDB core process' });
-const harperdb_cpu_percentage_gauge = new Prometheus.Gauge({ name: 'harperdb_process_cpu_utilization', help: 'CPU utilization of a HarperDB process', labelNames: ['process_name'] });
+	// Create a settings.json file if one does not exist
+	if (server?.workerIndex === 0 &&
+		PrometheusExporterSettings?.getRecordCount({ exactCount: false })?.recordCount === 0) {
+		await PrometheusExporterSettings.put({ name: 'forceAuthorization', value: true });
+		await PrometheusExporterSettings.put({ name: 'allowedUsers', value: [] });
+		await PrometheusExporterSettings.put({ name: 'customMetrics', value: [] });
+	}
 
-const connections_gauge = new Prometheus.Gauge({ name: 'connection', help: 'Number of successful connection attempts by protocol', labelNames: ['protocol', 'type', 'action'] });
-const open_connections_gauge = new Prometheus.Gauge({ name: 'open_connections', help: 'Average number of connections across all threads', labelNames: ['protocol'] });
-const acl_fail_gauge = new Prometheus.Gauge({ name: 'acl_fail', help: 'Number of failed ACL usages', labelNames: ['topic'] });
-const bytes_sent_gauge = new Prometheus.Gauge({ name: 'bytes_sent', help: 'Bytes sent by protocol', labelNames: ['protocol', 'action', 'topic'] });
-const messages_sent_gauge = new Prometheus.Gauge({ name: 'messages_sent', help: 'Messages sent by protocol', labelNames: ['protocol', 'action', 'topic'] });
-const bytes_received_gauge = new Prometheus.Gauge({ name: 'bytes_received', help: 'Bytes received by protocol', labelNames: ['protocol', 'action', 'topic'] });
-const messages_received_gauge = new Prometheus.Gauge({ name: 'messages_received', help: 'Messages received by protocol', labelNames: ['protocol', 'action', 'topic'] });
-const cache_hits_gauge = new Prometheus.Gauge({ name: 'cache_hit', help: 'Number of cache hits by table', labelNames: ['table'] });
-const cache_miss_gauge = new Prometheus.Gauge({ name: 'cache_miss', help: 'Number of cache misses by table', labelNames: ['table'] });
-const success_gauge = new Prometheus.Gauge({ name: 'success', help: 'Number of success requests by endpoint', labelNames: ['path', 'type', 'method', 'label'] });
-
-const filesystem_size_bytes = new Prometheus.Gauge({ name: 'filesystem_size_bytes', help: 'Filesystem size in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] });
-const filesystem_avail_bytes = new Prometheus.Gauge({ name: 'filesystem_free_bytes', help: 'Filesystem free space in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] });
-const filesystem_used_bytes = new Prometheus.Gauge({ name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] })
-
-const cluster_ping_gauge = new Prometheus.Gauge({ name: 'cluster_ping', help: 'Cluster ping response time', labelNames: ['node'] });
-const replication_backlog_gauge = new Prometheus.Gauge({ name: 'replication_backlog', help: 'Number of pending replication consumers', labelNames: ['origin', 'database', 'table'] });
-
-//logic to create a settings.json file if one does not exist
-if (server.workerIndex == 0) {
-  (async () => {
-
-    if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({ name: "forceAuthorization", value: true })
-      PrometheusExporterSettings.put({ name: "allowedUsers", value: [] })
-      PrometheusExporterSettings.put({ name: "customMetrics", value: [] })
-    }
-  })();
-}
+	gaugeData.forEach(gauge => gauges.push(new Prometheus.Gauge(gauge)));
+};
 
 class metrics extends Resource {
-  async allowRead(user) {
-    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
 
-    if (forceAuthorization !== true) {
-      return true;
-    }
+	async allowRead(user) {
+		const forceAuthorization = await PrometheusExporterSettings?.get('forceAuthorization')?.value;
+		if (forceAuthorization !== true) return true;
+		const allowedUsers = await PrometheusExporterSettings?.get('allowedUsers')?.value;
+		if (allowedUsers.length > 0) return allowedUsers.some(allow_user => allow_user === user?.username);
+		return user?.role?.role === 'super_user';
+	}
 
-    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
-    if (allowedUsers.length > 0) {
-      return allowedUsers.some(allow_user => {
-        return allow_user === user?.username;
-      });
-    } else
-      return user?.role?.role === 'super_user';
-  }
+	async get() {
+		if (gauges.length === 0) await init();
+		gauges.forEach(gauge => gauge.reset());
+		const systemInfo = await getAnalytics('system_information',
+			['database_metrics', 'harperdb_processes', 'replication', 'threads']);
 
-  async get() {
-    //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
-    puts_gauge.reset();
-    deletes_gauge.reset();
-    txns_gauge.reset();
-    page_flushes_gauge.reset();
-    writes_gauge.reset();
-    pages_written_gauge.reset();
-    time_during_txns_gauge.reset();
-    time_start_txns_gauge.reset();
-    time_page_flushes_gauge.reset();
-    time_sync_gauge.reset();
-    thread_count_gauge.reset();
-    harperdb_cpu_percentage_gauge.reset();
+		// Set value for harperdb_process_threads_count gauge
+		setGauge('harperdb_process_threads_count', {}, systemInfo?.threads?.length);
 
-    connections_gauge.reset();
-    open_connections_gauge.reset();
-    acl_fail_gauge.reset();
-    bytes_sent_gauge.reset();
-    cache_hits_gauge.reset();
-    cache_miss_gauge.reset();
-    bytes_received_gauge.reset();
-    success_gauge.reset();
+		// Set value for harperdb_process_cpu_utilization gauge
+		if (systemInfo?.harperdb_processes?.core?.length > 0) {
+			setGauge('harperdb_process_cpu_utilization', { process_name: 'harperdb_core' },
+				systemInfo?.harperdb_processes?.core[0]?.cpu);
+		}
 
-    filesystem_size_bytes.reset();
-    filesystem_avail_bytes.reset();
-    filesystem_used_bytes.reset();
+		// Set values for filesystem gauges
+		const sizes = await fsSize();
+		sizes?.forEach(device => {
+			Object.entries({
+					filesystem_size_bytes: device.size,
+					filesystem_free_bytes: device.available,
+					filesystem_used_bytes: device.use
+				}
+			).forEach(([metric, mountpoint]) => {
+				setGauge(metric, { device: device.fs, fstype: device.type, mountpoint });
+			});
+		});
 
-    cluster_ping_gauge.reset();
-    replication_backlog_gauge.reset();
+		// Set values for database table gauges
+		Object.entries(systemInfo?.metrics).forEach((database, tableObject) => {
+			Object.entries(tableObject).forEach(([table, metrics]) => {
+				Object.entries({
+					database_table_puts_total: 'puts',
+					database_table_deletes_total: 'deletes',
+					database_table_txns_total: 'txns',
+					database_table_page_flushes_total: 'pageFlushes',
+					database_table_writes_total: 'writes',
+					database_table_pages_written_total: 'pagesWritten',
+					database_table_time_during_txns_seconds: 'timeDuringTxns',
+					database_table_time_start_txns_seconds: 'timeStartTxns',
+					database_table_time_page_flushes_seconds: 'timePageFlushes',
+					database_table_time_sync_seconds: 'timeSync'
+				}).forEach((name, value) => {
+					setGauge(name, { database, table }, metrics[value]);
+				});
+			});
+		});
 
-    const system_info = await hdb_analytics.operation({
-      operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads']
-    });
+		// Set values for clustering gauges
+		systemInfo.harperdb_processes?.clustering?.forEach(data => {
+			if (data?.params?.endsWith('.json')) {
+				setGauge('harperdb_process_cpu_utilization', { process_name: 'harperdb_clustering_hub' }, data.cpu);
+			}
+			if (data?.params?.endsWith('hub.json')) {
+				setGauge('harperdb_process_cpu_utilization', { process_name: 'harperdb_clustering_hub' }, data.cpu);
+			} else if (data?.params?.endsWith('leaf.json')) {
+				gaugeSet('harperdb_process_cpu_utilization', { process_name: 'harperdb_clustering_leaf' }, data.cpu);
+			}
+		});
 
-    gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
+		//    system_info.replication?.forEach(repl_item => {
+		//      repl_item.consumers?.forEach(consumer => {
+		//        const { database, table } = repl_item;
+		//        gaugeSet(replication_backlog_gauge, { origin: consumer.name, database, table }, consumer.num_pending || 0);
+		//      });
+		//    });
+		//
+		//    // Cluster metrics
+		//    const cluster_info = await hdb_analytics.operation({
+		//      operation: 'cluster_network',
+		//      attributes: ['response_time']
+		//    });
+		//
+		//    if (cluster_info) {
+		//      // Set cluster_ping_gauge for each node in the cluster
+		//      cluster_info.nodes?.forEach(node => {
+		//        gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+		//      });
+		//    }
 
-    if (system_info?.harperdb_processes?.core?.length > 0) {
-      gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
-        system_info?.harperdb_processes?.core[0]?.cpu);
-    }
-    const sizes = await fsSize();
-
-    sizes.forEach(device => {
-      gaugeSet(filesystem_size_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.size);
-      gaugeSet(filesystem_avail_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.available);
-      gaugeSet(filesystem_used_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.use);
-    });
-
-    system_info.harperdb_processes.clustering.forEach(process_data => {
-      if (process_data?.params?.endsWith('hub.json')) {
-        gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
-      } else if (process_data?.params?.endsWith('leaf.json')) {
-        gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
-      }
-    });
-
-    system_info.replication?.forEach(repl_item => {
-      repl_item.consumers?.forEach(consumer => {
-        const { database, table } = repl_item;
-        gaugeSet(replication_backlog_gauge, { origin: consumer.name, database, table }, consumer.num_pending || 0);
-      });
-    });
-
-    // Cluster metrics
-    const cluster_info = await hdb_analytics.operation({
-      operation: 'cluster_network',
-      attributes: ['response_time']
-    });
-
-    if (cluster_info) {
-      // Set cluster_ping_gauge for each node in the cluster
-      cluster_info.nodes?.forEach(node => {
-        gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
-      });
-    }
-
-    for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
-      for (const [table_name, table_metrics] of Object.entries(table_object)) {
-        const labels = { database: database_name, table: table_name };
-        gaugeSet(puts_gauge, labels, table_metrics?.puts);
-        gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
-        gaugeSet(txns_gauge, labels, table_metrics?.txns);
-        gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
-        gaugeSet(writes_gauge, labels, table_metrics?.writes);
-        gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
-        gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
-        gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
-        gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
-        gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
-      }
-    }
-
-    let output = await generateMetricsFromAnalytics();
-    let prom_results = await Prometheus.register.metrics();
-
-    if (output.length > 0) {
-      return output.join('\n') + '\n' + prom_results;
-    } else {
-      return prom_results;
-    }
-  }
+		const output = await generateMetricsFromAnalytics();
+		const promMetrics = await Prometheus.register?.metrics();
+		if (output.length > 0) return `${output.join('\n')}\n${promMetrics}`;
+		return promMetrics;
+	}
 }
 
-async function generateMetricsFromAnalytics() {
-  const end_at = Date.now();
-  const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
-  let results = await hdb_analytics.search({
-    conditions: [
-      { attribute: 'id', value: [start_at, end_at], comparator: 'between' }
-    ]
-  });
+const generateMetricsFromAnalytics = async () => {
+	const end = Date.now();
+	const start = end - (AGGREGATE_PERIOD_MS * 1.5);
+	const metrics = await hdb_analytics.search({
+		conditions: [
+			{ attribute: 'id', value: [start, end], comparator: 'between' }
+		]
+	});
 
-  let output = [];
+	const output = [];
+	for await (const metric of metrics) {
+		const protocol = metric?.type, action = metric?.method, topic = metric?.path;
+		const defaultLabels = { protocol, action, topic };
+		const { method, path, type } = metric;
+		switch (metric?.metric) {
+			case 'connection':
+				Object.entries({ total: metric.count, success: metric.total, failed: metric.count - metric.total })
+				.forEach(([type, value]) => setGauge('connection', { ...defaultLabels, type }, value));
+				break;
+			case 'mqtt-connections':
+				setGauge('open_connections', { protocol: 'mqtt' }, metric.connections);
+				break;
+			case 'acl-fail':
+				setGauge('acl_fail', { topic }, metric.total);
+				break;
+			case 'connections':
+				setGauge('open_connections', { protocol }, metric.connections);
+				break;
+			case 'bytes-sent':
+				setGauge('bytes_sent', defaultLabels, metric.count * metric.mean);
+				setGauge('messages_sent', defaultLabels, metric.count);
+				break;
+			case 'bytes-received':
+				setGauge('bytes_received', defaultLabels, metric.count * metric.mean);
+				setGauge('messages_received', defaultLabels, metric.count);
+				break;
+			case 'TTFB':
+			case 'duration':
+				output.push(createQuantileMetrics('Time for HarperDB to execute request in ms', metric,
+					{ type, path, method }));
+				break;
+			case 'cache-resolution':
+				output.push(createQuantileMetrics('Time to resolve a cache miss', metric, { table: path }));
+				break;
+			case 'cache-hit':
+				gaugeSet(cache_hits_gauge, { table: path }, metric.total);
+				gaugeSet(cache_miss_gauge, { table: path }, metric.count - metric.total);
+				break;
+			case 'success':
+				gaugeSet(success_gauge, { path, method, type, label: 'total' }, metric.total);
+				gaugeSet(success_gauge, { path, method, type, label: 'success' }, metric.count);
+				break;
+			case 'transfer':
+				output.push(createQuantileMetrics('Time to transfer request (ms)', metric,
+					{ type, path, method }));
+				break;
+			case 'replication-latency':
+				// Split by '.' on the path value from the metric to get origin, database and table
+				const [origin, database, table] = path?.split('.');
+				output.push(createQuantileMetrics('Replication latency', metric, { origin, database, table }));
+				break;
+			default:
+				const customMetrics = await PrometheusExporterSettings.get('customMetrics').value;
+				await outputCustomMetrics(customMetrics, metric, output);
+				break;
+		}
+	}
+	return output;
+};
 
-  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
+const createQuantileMetrics = ((help, metric, props) => {
+	// Prometheus doesn't like hyphens in metric names
+	const name = metric.metric?.replaceAll('-', '_');
+	// HELP and TYPE are the first two items for all metrics
+	const output = [`# HELP ${name} ${help}`, `# TYPE ${metric.metric} summary`];
+	// Create string like type="type",path="path",method="method" based on props object
+	const propsString = Object.entries(props)?.map(([key, value]) => `${key}="${value}"`).join(',');
 
-  for await (const metric of results) {
-    if (metric) {
-      switch (metric?.metric) {
-        case 'connection':
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
-            metric.count);
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
-            metric.total);
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
-            metric?.count - metric?.total);
-          break;
-        case 'mqtt-connections':
-          gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
-          break;
-        case 'acl-fail':
-          gaugeSet(acl_fail_gauge, { topic: metric.path }, metric.total);
-          break;
-        case 'connections':
-          gaugeSet(open_connections_gauge, { protocol: 'ws' }, metric.connections);
-          break;
-        case 'bytes-sent':
-          gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
-          gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
-          break;
-        case 'bytes-received':
-          gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
-          gaugeSet(messages_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
-          break;
-        case 'TTFB':
-        case 'duration':
-          output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
-          output.push(`# TYPE ${metric.metric} summary`);
-          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-          break;
-        case 'cache-resolution':
-          //prometheus doesn't like hyphens in metric names
-          let metric_name = 'cache_resolution';
-          output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
-          output.push(`# TYPE ${metric_name} summary`);
-          output.push(`${metric_name}{quantile="0.01",table="${metric.path}"} ${metric.p1}`);
-          output.push(`${metric_name}{quantile="0.10",table="${metric.path}"} ${metric.p10}`);
-          output.push(`${metric_name}{quantile="0.25",table="${metric.path}"} ${metric.p25}`);
-          output.push(`${metric_name}{quantile="0.50",table="${metric.path}"} ${metric.median}`);
-          output.push(`${metric_name}{quantile="0.75",table="${metric.path}"} ${metric.p75}`);
-          output.push(`${metric_name}{quantile="0.90",table="${metric.path}"} ${metric.p90}`);
-          output.push(`${metric_name}{quantile="0.95",table="${metric.path}"} ${metric.p95}`);
-          output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
-          output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
-          output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
-          break;
-        case 'cache-hit':
-          gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
-          gaugeSet(cache_miss_gauge, { table: metric.path }, metric.count - metric.total);
-          break;
-        case 'success':
-          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'total' },
-            metric.total);
-          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'success' },
-            metric.count);
-          break;
-        case 'transfer':
-          output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
-          output.push(`# TYPE ${metric.metric} summary`);
-          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-          //needs to be a new line after every metric
-          break;
-        case 'replication-latency':
-          // Split by '.' on the path value from the metric to get origin, database and table
-          const [ origin, database, table ] = metric.path?.split('.');
-          output.push(`# HELP ${metric.metric} Replication latency`);
-          output.push(`# TYPE ${metric.metric} summary`);
+	// Push a string to output array for each of the quantiles
+	// TODO: Quantile level 50 is actually called "median" -- is it also available as "p50"?
+	QUANTILE_LEVELS.forEach(quantile => {
+		output.push(`${name}{quantile="${quantile.toFixed(2)}",${propsString} ${metric['p' + (quantile * 100)] || 0}`);
+	});
 
-          // Push a string to output array for each of the quantiles
-          QUANTILE_LEVELS.forEach(quantile => {
-            output.push(`${metric.metric}{quantile="${quantile.toFixed(2)}",origin="${origin}",database="${database}",table="${table}"} ${metric['p' + (quantile * 100)]}`);
-          });
+	// Add sum and count
+	output.push(`${name}_sum{${propsString}} ${(metric.mean || 0) * (metric.count || 0)}`);
+	output.push(`${name}_count{${propsString}} ${metric.count || 0}`);
+	return output;
+});
 
-          // Add sum and count
-          output.push(`${metric.metric}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
-          break;
-        default:
-          await outputCustomMetrics(customMetrics, metric, output);
-          break;
-      }
-    }
-  }
-  return output;
-}
+// Get gauge by name
+const getGauge = name => gauges.find(gauge => gauge.name === name);
 
 // Call set() function on any gauge object with a default value of 0
-const gaugeSet = (gauge, options, value) => gauge?.set(options, value || 0);
+const setGauge = (gaugeName, options, value) => getGauge(gaugeName)?.set(options, value || 0);
 
-async function outputCustomMetrics(customMetrics, metric, output) {
-  customMetrics.forEach(custom_metric => {
-    const customMetricName = custom_metric.get('name');
-    if (metric[custom_metric.get('metricAttribute')] === customMetricName) {
-      output.push(`# HELP ${customMetricName} ${custom_metric.help}`);
-      output.push(`# TYPE ${customMetricName} summary`);
+// Get analytics data from hdb_analytics
+const getAnalytics = async (operation, attributes) => await hdb_analytics.operation({ operation, attributes });
 
-      const labels = buildCustomLabels(custom_metric, metric);
-
-      output.push(`${customMetricName}{quantile="0.01",${labels}} ${metric.p1 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.10",${labels}} ${metric.p10 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.25",${labels}} ${metric.p25 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.50",${labels}} ${metric.median ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.75",${labels}} ${metric.p75 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.90",${labels}} ${metric.p90 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.95",${labels}} ${metric.p95 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.99",${labels}} ${metric.p99 ?? 0}`);
-      output.push(`${customMetricName}_sum{${labels}} ${((metric.mean ?? 0) * (metric.count ?? 0))}`);
-      output.push(`${customMetricName}_count{${labels}} ${metric.count}`);
-    }
-  })
-}
-
-function buildCustomLabels(custom_metric, metric) {
-  let labels = [];
-  custom_metric.get('labels').forEach(label => {
-    labels.push(`${label.label}="${metric[label.metricAttribute]}"`);
-  });
-  return labels.join(',');
-}
-
-export const prometheus_exporter = {
-  metrics,
-  PrometheusExporterSettings
-}
+export const prometheus_exporter = { metrics };
