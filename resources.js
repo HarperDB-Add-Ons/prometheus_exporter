@@ -1,4 +1,4 @@
-import { fsSize } from 'systeminformation'
+import { fsSize } from 'systeminformation';
 
 const { hdb_analytics } = databases.system;
 const { analytics } = server.config;
@@ -49,10 +49,11 @@ const messages_received_gauge = new Prometheus.Gauge({ name: 'messages_received'
 const cache_hits_gauge = new Prometheus.Gauge({ name: 'cache_hit', help: 'Number of cache hits by table', labelNames: ['table'] });
 const cache_miss_gauge = new Prometheus.Gauge({ name: 'cache_miss', help: 'Number of cache misses by table', labelNames: ['table'] });
 const success_gauge = new Prometheus.Gauge({ name: 'success', help: 'Number of success requests by endpoint', labelNames: ['path', 'type', 'method', 'label'] });
+const response_status_code_gauge = new Prometheus.Gauge({ name: 'response_status_code', help: 'Number of requests by HTTP response status code', labelNames: ['path', 'method', 'status_code'] });
 
 const filesystem_size_bytes = new Prometheus.Gauge({ name: 'filesystem_size_bytes', help: 'Filesystem size in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] });
 const filesystem_avail_bytes = new Prometheus.Gauge({ name: 'filesystem_free_bytes', help: 'Filesystem free space in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] });
-const filesystem_used_bytes = new Prometheus.Gauge({ name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] })
+const filesystem_used_bytes = new Prometheus.Gauge({ name: 'filesystem_used_bytes', help: 'Filesystem space used in bytes.', labelNames: ['device', 'fstype', 'mountpoint'] });
 
 const cluster_ping_gauge = new Prometheus.Gauge({ name: 'cluster_ping', help: 'Cluster ping response time', labelNames: ['node'] });
 const replication_backlog_gauge = new Prometheus.Gauge({ name: 'replication_backlog', help: 'Number of pending replication consumers', labelNames: ['origin', 'database', 'table'] });
@@ -62,22 +63,22 @@ if (server.workerIndex == 0) {
   (async () => {
 
     if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({ name: "forceAuthorization", value: true })
-      PrometheusExporterSettings.put({ name: "allowedUsers", value: [] })
-      PrometheusExporterSettings.put({ name: "customMetrics", value: [] })
+      PrometheusExporterSettings.put({ name: "forceAuthorization", value: true });
+      PrometheusExporterSettings.put({ name: "allowedUsers", value: [] });
+      PrometheusExporterSettings.put({ name: "customMetrics", value: [] });
     }
   })();
 }
 
 class metrics extends Resource {
   async allowRead(user) {
-    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value
+    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value;
 
     if (forceAuthorization !== true) {
       return true;
     }
 
-    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value
+    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value;
     if (allowedUsers.length > 0) {
       return allowedUsers.some(allow_user => {
         return allow_user === user?.username;
@@ -109,6 +110,7 @@ class metrics extends Resource {
     cache_miss_gauge.reset();
     bytes_received_gauge.reset();
     success_gauge.reset();
+    response_status_code_gauge.reset();
 
     filesystem_size_bytes.reset();
     filesystem_avail_bytes.reset();
@@ -139,31 +141,35 @@ class metrics extends Resource {
         device.use);
     });
 
-    system_info.harperdb_processes.clustering.forEach(process_data => {
-      if (process_data?.params?.endsWith('hub.json')) {
-        gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
-      } else if (process_data?.params?.endsWith('leaf.json')) {
-        gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
-      }
-    });
-
-    system_info.replication?.forEach(repl_item => {
-      repl_item.consumers?.forEach(consumer => {
-        const { database, table } = repl_item;
-        gaugeSet(replication_backlog_gauge, { origin: consumer.name, database, table }, consumer.num_pending || 0);
+    if (system_info.harperdb_processes.clustering?.length > 0) {
+      system_info.harperdb_processes.clustering.forEach(process_data => {
+        if (process_data?.params?.endsWith('hub.json')) {
+          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
+        } else if (process_data?.params?.endsWith('leaf.json')) {
+          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
+        }
       });
-    });
 
-    // Cluster metrics
-    const cluster_info = await hdb_analytics.operation({
-      operation: 'cluster_network',
-      attributes: ['response_time']
-    });
+      // Cluster metrics
+      const cluster_info = await hdb_analytics.operation({
+        operation: 'cluster_network',
+        attributes: ['response_time']
+      });
 
-    if (cluster_info) {
-      // Set cluster_ping_gauge for each node in the cluster
-      cluster_info.nodes?.forEach(node => {
-        gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+      if (cluster_info) {
+        // Set cluster_ping_gauge for each node in the cluster
+        cluster_info.nodes?.forEach(node => {
+          gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+        });
+      }
+    }
+
+    if (system_info.replication?.length > 0) {
+      system_info.replication?.forEach(repl_item => {
+        repl_item.consumers?.forEach(consumer => {
+          const { database, table } = repl_item;
+          gaugeSet(replication_backlog_gauge, { origin: consumer.name, database, table }, consumer.num_pending || 0);
+        });
       });
     }
 
@@ -183,8 +189,8 @@ class metrics extends Resource {
       }
     }
 
-    let output = await generateMetricsFromAnalytics();
-    let prom_results = await Prometheus.register.metrics();
+    const output = await generateMetricsFromAnalytics();
+    const prom_results = await Prometheus.register.metrics();
 
     if (output.length > 0) {
       return output.join('\n') + '\n' + prom_results;
@@ -203,12 +209,18 @@ async function generateMetricsFromAnalytics() {
     ]
   });
 
-  let output = [];
+  const output = [];
+  const customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value;
 
-  let customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value
-
-  for await (const metric of results) {
+  for await (let metric of results) {
     if (metric) {
+      // HTTP response status code metrics; status code is in metric name, e.g. response_200
+      if (metric.metric?.startsWith('response_')) {
+        gaugeSet(response_status_code_gauge, { path: metric.path, method: metric.method,
+          status_code: metric.metric.split('_')[1] }, metric.count);
+        continue;
+      };
+
       switch (metric?.metric) {
         case 'connection':
           gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
@@ -297,7 +309,7 @@ async function generateMetricsFromAnalytics() {
           break;
         case 'replication-latency':
           // Split by '.' on the path value from the metric to get origin, database and table
-          const [ origin, database, table ] = metric.path?.split('.');
+          const [origin, database, table] = metric.path?.split('.');
           output.push(`# HELP ${metric.metric} Replication latency`);
           output.push(`# TYPE ${metric.metric} summary`);
 
@@ -342,7 +354,7 @@ async function outputCustomMetrics(customMetrics, metric, output) {
       output.push(`${customMetricName}_sum{${labels}} ${((metric.mean ?? 0) * (metric.count ?? 0))}`);
       output.push(`${customMetricName}_count{${labels}} ${metric.count}`);
     }
-  })
+  });
 }
 
 function buildCustomLabels(custom_metric, metric) {
@@ -356,4 +368,4 @@ function buildCustomLabels(custom_metric, metric) {
 export const prometheus_exporter = {
   metrics,
   PrometheusExporterSettings
-}
+};
