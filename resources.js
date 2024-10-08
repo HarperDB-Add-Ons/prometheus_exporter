@@ -307,23 +307,23 @@ async function generateMetricsFromAnalytics() {
           //needs to be a new line after every metric
           break;
         case 'replication-latency':
-          metric_name = 'replication_latency';
+          let m_name = 'replication_latency';
           // Split by '.' on the path value from the metric to get origin, database and table
           const [origin, database, table] = metric.path?.split('.');
-          output.push(`# HELP ${metric_name} Replication latency`);
-          output.push(`# TYPE ${metric_name} summary`);
-          output.push(`${metric_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
-          output.push(`${metric_name}{quantile="0.10",origin="${origin}",database="${database}",table="${table}"} ${metric.p10}`);
-          output.push(`${metric_name}{quantile="0.25",origin="${origin}",database="${database}",table="${table}"} ${metric.p25}`);
-          output.push(`${metric_name}{quantile="0.50",origin="${origin}",database="${database}",table="${table}"} ${metric.median}`);
-          output.push(`${metric_name}{quantile="0.75",origin="${origin}",database="${database}",table="${table}"} ${metric.p75}`);
-          output.push(`${metric_name}{quantile="0.90",origin="${origin}",database="${database}",table="${table}"} ${metric.p90}`);
-          output.push(`${metric_name}{quantile="0.95",origin="${origin}",database="${database}",table="${table}"} ${metric.p95}`);
-          output.push(`${metric_name}{quantile="0.99",origin="${origin}",database="${database}",table="${table}"} ${metric.p99}`);
+          output.push(`# HELP ${m_name} Replication latency`);
+          output.push(`# TYPE ${m_name} summary`);
+          output.push(`${m_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
+          output.push(`${m_name}{quantile="0.10",origin="${origin}",database="${database}",table="${table}"} ${metric.p10}`);
+          output.push(`${m_name}{quantile="0.25",origin="${origin}",database="${database}",table="${table}"} ${metric.p25}`);
+          output.push(`${m_name}{quantile="0.50",origin="${origin}",database="${database}",table="${table}"} ${metric.median}`);
+          output.push(`${m_name}{quantile="0.75",origin="${origin}",database="${database}",table="${table}"} ${metric.p75}`);
+          output.push(`${m_name}{quantile="0.90",origin="${origin}",database="${database}",table="${table}"} ${metric.p90}`);
+          output.push(`${m_name}{quantile="0.95",origin="${origin}",database="${database}",table="${table}"} ${metric.p95}`);
+          output.push(`${m_name}{quantile="0.99",origin="${origin}",database="${database}",table="${table}"} ${metric.p99}`);
 
           // Add sum and count
-          output.push(`${metric.metric}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
+          output.push(`${m_name}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
+          output.push(`${m_name}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
           break;
         default:
           await outputCustomMetrics(customMetrics, metric, output);
