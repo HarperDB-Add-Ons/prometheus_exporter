@@ -10,7 +10,6 @@ const require = createRequire(import.meta.url);
 const { PrometheusExporterSettings } = tables;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
-const QUANTILE_LEVELS = [.01, .1, .25, .5, .75, .9, .95, .99];
 
 import Prometheus from 'prom-client';
 
@@ -308,15 +307,19 @@ async function generateMetricsFromAnalytics() {
           //needs to be a new line after every metric
           break;
         case 'replication-latency':
+          metric_name = 'replication_latency';
           // Split by '.' on the path value from the metric to get origin, database and table
           const [origin, database, table] = metric.path?.split('.');
-          output.push(`# HELP ${metric.metric} Replication latency`);
-          output.push(`# TYPE ${metric.metric} summary`);
-
-          // Push a string to output array for each of the quantiles
-          QUANTILE_LEVELS.forEach(quantile => {
-            output.push(`${metric.metric}{quantile="${quantile.toFixed(2)}",origin="${origin}",database="${database}",table="${table}"} ${metric['p' + (quantile * 100)]}`);
-          });
+          output.push(`# HELP ${metric_name} Replication latency`);
+          output.push(`# TYPE ${metric_name} summary`);
+          output.push(`${metric_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
+          output.push(`${metric_name}{quantile="0.10",origin="${origin}",database="${database}",table="${table}"} ${metric.p10}`);
+          output.push(`${metric_name}{quantile="0.25",origin="${origin}",database="${database}",table="${table}"} ${metric.p25}`);
+          output.push(`${metric_name}{quantile="0.50",origin="${origin}",database="${database}",table="${table}"} ${metric.median}`);
+          output.push(`${metric_name}{quantile="0.75",origin="${origin}",database="${database}",table="${table}"} ${metric.p75}`);
+          output.push(`${metric_name}{quantile="0.90",origin="${origin}",database="${database}",table="${table}"} ${metric.p90}`);
+          output.push(`${metric_name}{quantile="0.95",origin="${origin}",database="${database}",table="${table}"} ${metric.p95}`);
+          output.push(`${metric_name}{quantile="0.99",origin="${origin}",database="${database}",table="${table}"} ${metric.p99}`);
 
           // Add sum and count
           output.push(`${metric.metric}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
