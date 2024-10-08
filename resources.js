@@ -315,7 +315,7 @@ async function generateMetricsFromAnalytics() {
 
           // Push a string to output array for each of the quantiles
           QUANTILE_LEVELS.forEach(quantile => {
-            output.push(`${metric.metric}{quantile="${quantile.toFixed(2)}",origin="${origin}",database="${database}",table="${table}"} ${metric['p' + (quantile * 100)]}`);
+            output.push(`replication_latency{quantile="${quantile.toFixed(2)}",origin="${origin}",database="${database}",table="${table}"} ${metric['p' + (quantile * 100)]}`);
           });
 
           // Add sum and count
