@@ -309,8 +309,8 @@ async function generateMetricsFromAnalytics() {
         case 'replication-latency':
           let m_name = 'replication_latency';
           // Split by '.' on the path value from the metric to get origin, database and table
-          let [txn, origin, database, table] = metric.path?.split('.');
-          table = table.replace('-leaf', '');
+          let [txn, database, table, origin] = metric.path?.split('.');
+          origin = origin.replace('-leaf', '');
           output.push(`# HELP ${m_name} Replication latency`);
           output.push(`# TYPE ${m_name} summary`);
           output.push(`${m_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
