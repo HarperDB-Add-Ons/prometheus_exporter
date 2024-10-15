@@ -214,11 +214,11 @@ async function generateMetricsFromAnalytics() {
   for await (let metric of results) {
     if (metric) {
       // HTTP response status code metrics; status code is in metric name, e.g. response_200
-      if (typeof metric === 'string' && metric.metric?.startsWith('response_')) {
+      if (typeof metric?.metric === 'string' && metric.metric?.startsWith('response_')) {
         gaugeSet(response_status_code_gauge, { path: metric.path, method: metric.method,
           status_code: metric.metric.split('_')[1] }, metric.count);
         continue;
-      };
+      }
 
       switch (metric?.metric) {
         case 'connection':
