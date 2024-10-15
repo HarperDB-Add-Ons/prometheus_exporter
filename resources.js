@@ -270,16 +270,16 @@ async function generateMetricsFromAnalytics() {
           let metric_name = 'cache_resolution';
           output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
           output.push(`# TYPE ${metric_name} summary`);
-          output.push(`${metric_name}{quantile="0.01",table="${metric.path}"} ${metric.p1}`);
-          output.push(`${metric_name}{quantile="0.10",table="${metric.path}"} ${metric.p10}`);
-          output.push(`${metric_name}{quantile="0.25",table="${metric.path}"} ${metric.p25}`);
-          output.push(`${metric_name}{quantile="0.50",table="${metric.path}"} ${metric.median}`);
-          output.push(`${metric_name}{quantile="0.75",table="${metric.path}"} ${metric.p75}`);
-          output.push(`${metric_name}{quantile="0.90",table="${metric.path}"} ${metric.p90}`);
-          output.push(`${metric_name}{quantile="0.95",table="${metric.path}"} ${metric.p95}`);
-          output.push(`${metric_name}{quantile="0.99",table="${metric.path}"} ${metric.p99}`);
-          output.push(`${metric_name}_sum{table="${metric.path}"} ${metric.mean * metric.count}`);
-          output.push(`${metric_name}_count{table="${metric.path}"} ${metric.count}`);
+          output.push(`${metric_name}{quantile="0.01",type="${metric.type}",table="${metric.path}"} ${metric.p1}`);
+          output.push(`${metric_name}{quantile="0.10",type="${metric.type}",table="${metric.path}"} ${metric.p10}`);
+          output.push(`${metric_name}{quantile="0.25",type="${metric.type}",table="${metric.path}"} ${metric.p25}`);
+          output.push(`${metric_name}{quantile="0.50",type="${metric.type}",table="${metric.path}"} ${metric.median}`);
+          output.push(`${metric_name}{quantile="0.75",type="${metric.type}",table="${metric.path}"} ${metric.p75}`);
+          output.push(`${metric_name}{quantile="0.90",type="${metric.type}",table="${metric.path}"} ${metric.p90}`);
+          output.push(`${metric_name}{quantile="0.95",type="${metric.type}",table="${metric.path}"} ${metric.p95}`);
+          output.push(`${metric_name}{quantile="0.99",type="${metric.type}",table="${metric.path}"} ${metric.p99}`);
+          output.push(`${metric_name}_sum{type="${metric.type}",table="${metric.path}"} ${metric.mean * metric.count}`);
+          output.push(`${metric_name}_count{type="${metric.type}",table="${metric.path}"} ${metric.count}`);
           break;
         case 'cache-hit':
           gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
