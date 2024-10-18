@@ -57,6 +57,16 @@ const filesystem_used_bytes = new Prometheus.Gauge({ name: 'filesystem_used_byte
 const cluster_ping_gauge = new Prometheus.Gauge({ name: 'cluster_ping', help: 'Cluster ping response time', labelNames: ['node'] });
 const replication_backlog_gauge = new Prometheus.Gauge({ name: 'replication_backlog', help: 'Number of pending replication consumers', labelNames: ['origin', 'database', 'table'] });
 
+const thread_heap_total_gauge = new Prometheus.Gauge({ name: 'thread_heap_total', help: 'Total heap space by thread in bytes', labelNames: ['thread_id', 'name'] });
+const thread_heap_used_gauge = new Prometheus.Gauge({ name: 'thread_heap_used', help: 'Used heap space by thread in bytes', labelNames: ['thread_id', 'name'] });
+const thread_external_memory_gauge = new Prometheus.Gauge({ name: 'thread_external_memory', help: 'External memory by thread in bytes', labelNames: ['thread_id', 'name'] });
+const thread_array_buffers_gauge = new Prometheus.Gauge({ name: 'thread_array_buffers', help: 'Array Buffers by thread in bytes', labelNames: ['thread_id', 'name'] });
+
+const thread_idle_gauge = new Prometheus.Gauge({ name: 'thread_idle', help: 'Idle time by thread in ms', labelNames: ['thread_id', 'name'] });
+const thread_active_gauge = new Prometheus.Gauge({ name: 'thread_active', help: 'Active time by thread in ms', labelNames: ['thread_id', 'name'] });
+const thread_utilization_gauge = new Prometheus.Gauge({ name: 'thread_utilization', help: 'Utilization by thread', labelNames: ['thread_id', 'name'] });
+
+
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
   (async () => {
@@ -118,12 +128,40 @@ class metrics extends Resource {
     cluster_ping_gauge.reset();
     replication_backlog_gauge.reset();
 
+    thread_heap_total_gauge.reset();
+    thread_heap_used_gauge.reset();
+    thread_external_memory_gauge.reset();
+    thread_array_buffers_gauge.reset();
+
+    thread_idle_gauge.reset();
+    thread_active_gauge.reset();
+    thread_utilization_gauge.reset();
+
     const system_info = await hdb_analytics.operation({
       operation: 'system_information',
       attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads']
     });
 
     gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
+    if (system_info?.threads?.length && system_info?.threads?.length > 0) {
+      system_info.threads.forEach(thread => {
+        gaugeSet(thread_heap_total_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.heapTotal);
+        gaugeSet(thread_heap_used_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.heapUsed);
+        gaugeSet(thread_external_memory_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.externalMemory);
+        gaugeSet(thread_array_buffers_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.arrayBuffers);
+
+        gaugeSet(thread_idle_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.idle);
+        gaugeSet(thread_active_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.active);
+        gaugeSet(thread_utilization_gauge, { thread_id: thread?.threadId, name: thread?.name },
+            thread?.utilization);
+      });
+    }
 
     if (system_info?.harperdb_processes?.core?.length > 0) {
       gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
