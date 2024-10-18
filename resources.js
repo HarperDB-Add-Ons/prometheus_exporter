@@ -66,6 +66,21 @@ const thread_idle_gauge = new Prometheus.Gauge({ name: 'thread_idle', help: 'Idl
 const thread_active_gauge = new Prometheus.Gauge({ name: 'thread_active', help: 'Active time by thread in ms', labelNames: ['thread_id', 'name'] });
 const thread_utilization_gauge = new Prometheus.Gauge({ name: 'thread_utilization', help: 'Utilization by thread', labelNames: ['thread_id', 'name'] });
 
+const memory_total_gauge = new Prometheus.Gauge({ name: 'memory_total', help: 'Total memory', labelNames: [] });
+const memory_free_gauge = new Prometheus.Gauge({ name: 'memory_free', help: 'Free memory', labelNames: [] });
+const memory_used_gauge = new Prometheus.Gauge({ name: 'memory_used', help: 'Used memory', labelNames: [] });
+const memory_active_gauge = new Prometheus.Gauge({ name: 'memory_active', help: 'Active memory', labelNames: [] });
+const memory_available_gauge = new Prometheus.Gauge({ name: 'memory_available', help: 'Available memory', labelNames: [] });
+const memory_swaptotal_gauge = new Prometheus.Gauge({ name: 'memory_swaptotal', help: 'Swap Total memory', labelNames: [] });
+const memory_swapused_gauge = new Prometheus.Gauge({ name: 'memory_swapused', help: 'Swap Used memory', labelNames: [] });
+const memory_swapfree_gauge = new Prometheus.Gauge({ name: 'memory_swapfree', help: 'Swap Free memory', labelNames: [] });
+const memory_writeback_gauge = new Prometheus.Gauge({ name: 'memory_writeback', help: 'writeback memory', labelNames: [] });
+const memory_dirty_gauge = new Prometheus.Gauge({ name: 'memory_dirty', help: 'dirty memory', labelNames: [] });
+const memory_rss_gauge = new Prometheus.Gauge({ name: 'memory_rss', help: 'rss memory', labelNames: [] });
+const memory_heap_total_gauge = new Prometheus.Gauge({ name: 'memory_heap_total', help: 'heap total memory', labelNames: [] });
+const memory_heap_used_gauge = new Prometheus.Gauge({ name: 'memory_heap_used', help: 'heap used memory', labelNames: [] });
+const memory_external_gauge = new Prometheus.Gauge({ name: 'memory_external', help: 'external memory', labelNames: [] });
+const memory_array_buffers_gauge = new Prometheus.Gauge({ name: 'memory_array_buffers', help: 'Array Buffers memory', labelNames: [] });
 
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
@@ -137,9 +152,25 @@ class metrics extends Resource {
     thread_active_gauge.reset();
     thread_utilization_gauge.reset();
 
+    memory_total_gauge.reset();
+    memory_free_gauge.reset();
+    memory_used_gauge.reset();
+    memory_active_gauge.reset();
+    memory_available_gauge.reset();
+    memory_swaptotal_gauge.reset();
+    memory_swapused_gauge.reset();
+    memory_swapfree_gauge.reset();
+    memory_writeback_gauge.reset();
+    memory_dirty_gauge.reset();
+    memory_rss_gauge.reset();
+    memory_heap_total_gauge.reset();
+    memory_heap_used_gauge.reset();
+    memory_external_gauge.reset();
+    memory_array_buffers_gauge.reset();
+
     const system_info = await hdb_analytics.operation({
       operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads']
+      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
     });
 
     gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
@@ -161,6 +192,25 @@ class metrics extends Resource {
         gaugeSet(thread_utilization_gauge, { thread_id: thread?.threadId, name: thread?.name },
             thread?.utilization);
       });
+    }
+
+    if(system_info?.memory) {
+      const memory = system_info.memory;
+      gaugeSet(memory_total_gauge, {}, memory.total);
+      gaugeSet(memory_free_gauge, {}, memory.free);
+      gaugeSet(memory_used_gauge, {}, memory.used);
+      gaugeSet(memory_active_gauge, {}, memory.active);
+      gaugeSet(memory_available_gauge, {}, memory.available);
+      gaugeSet(memory_swaptotal_gauge, {}, memory.swaptotal);
+      gaugeSet(memory_swapused_gauge, {}, memory.swapused);
+      gaugeSet(memory_swapfree_gauge, {}, memory.swapfree);
+      gaugeSet(memory_writeback_gauge, {}, memory.writeback);
+      gaugeSet(memory_dirty_gauge, {}, memory.dirty);
+      gaugeSet(memory_rss_gauge, {}, memory.rss);
+      gaugeSet(memory_heap_total_gauge, {}, memory.heapTotal);
+      gaugeSet(memory_heap_used_gauge, {}, memory.heapUsed);
+      gaugeSet(memory_external_gauge, {}, memory.external);
+      gaugeSet(memory_array_buffers_gauge, {}, memory.arrayBuffers);
     }
 
     if (system_info?.harperdb_processes?.core?.length > 0) {
