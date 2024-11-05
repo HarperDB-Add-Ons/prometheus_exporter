@@ -1,27 +1,20 @@
 import { fsSize } from 'systeminformation';
+import Prometheus from 'prom-client';
 
 const { hdb_analytics } = databases.system;
 const { analytics } = server.config;
-
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-
 const { PrometheusExporterSettings } = tables;
-
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
-
-import Prometheus from 'prom-client';
 
 Prometheus.collectDefaultMetrics();
 Prometheus.register.setContentType(
-  Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
+	Prometheus.Registry.OPENMETRICS_CONTENT_TYPE,
 );
 contentTypes.set('application/openmetrics-text', {
-  serialize(data) {
-    return data.toString();
-  },
-  q: 1,
+	serialize(data) {
+		return data.toString();
+	},
+	q: 1,
 });
 
 const puts_gauge = new Prometheus.Gauge({ name: 'harperdb_table_puts_total', help: 'Total number of non-delete writes by table', labelNames: ['database', 'table'] });
@@ -84,380 +77,409 @@ const memory_array_buffers_gauge = new Prometheus.Gauge({ name: 'memory_array_bu
 
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
-  (async () => {
+	(async () => {
 
-    if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({ name: "forceAuthorization", value: true });
-      PrometheusExporterSettings.put({ name: "allowedUsers", value: [] });
-      PrometheusExporterSettings.put({ name: "customMetrics", value: [] });
-    }
-  })();
+		if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
+			PrometheusExporterSettings.put({ name: "forceAuthorization", value: true });
+			PrometheusExporterSettings.put({ name: "allowedUsers", value: [] });
+			PrometheusExporterSettings.put({ name: "customMetrics", value: [] });
+		}
+	})();
 }
 
 class metrics extends Resource {
-  async allowRead(user) {
-    let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value;
+	async allowRead(user) {
+		let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value;
 
-    if (forceAuthorization !== true) {
-      return true;
-    }
+		if (forceAuthorization !== true) {
+			return true;
+		}
 
-    let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value;
-    if (allowedUsers.length > 0) {
-      return allowedUsers.some(allow_user => {
-        return allow_user === user?.username;
-      });
-    } else
-      return user?.role?.role === 'super_user';
-  }
+		let allowedUsers = (await PrometheusExporterSettings.get('allowedUsers')).value;
+		if (allowedUsers.length > 0) {
+			return allowedUsers.some(allow_user => {
+				return allow_user === user?.username;
+			});
+		} else
+			return user?.role?.role === 'super_user';
+	}
 
-  async get() {
-    //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
-    puts_gauge.reset();
-    deletes_gauge.reset();
-    txns_gauge.reset();
-    page_flushes_gauge.reset();
-    writes_gauge.reset();
-    pages_written_gauge.reset();
-    time_during_txns_gauge.reset();
-    time_start_txns_gauge.reset();
-    time_page_flushes_gauge.reset();
-    time_sync_gauge.reset();
-    thread_count_gauge.reset();
-    harperdb_cpu_percentage_gauge.reset();
+	async get() {
+		//reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
+		puts_gauge.reset();
+		deletes_gauge.reset();
+		txns_gauge.reset();
+		page_flushes_gauge.reset();
+		writes_gauge.reset();
+		pages_written_gauge.reset();
+		time_during_txns_gauge.reset();
+		time_start_txns_gauge.reset();
+		time_page_flushes_gauge.reset();
+		time_sync_gauge.reset();
+		thread_count_gauge.reset();
+		harperdb_cpu_percentage_gauge.reset();
 
-    connections_gauge.reset();
-    open_connections_gauge.reset();
-    acl_fail_gauge.reset();
-    bytes_sent_gauge.reset();
-    cache_hits_gauge.reset();
-    cache_miss_gauge.reset();
-    bytes_received_gauge.reset();
-    success_gauge.reset();
-    response_status_code_gauge.reset();
+		connections_gauge.reset();
+		open_connections_gauge.reset();
+		acl_fail_gauge.reset();
+		bytes_sent_gauge.reset();
+		cache_hits_gauge.reset();
+		cache_miss_gauge.reset();
+		bytes_received_gauge.reset();
+		success_gauge.reset();
+		response_status_code_gauge.reset();
 
-    filesystem_size_bytes.reset();
-    filesystem_avail_bytes.reset();
-    filesystem_used_bytes.reset();
+		filesystem_size_bytes.reset();
+		filesystem_avail_bytes.reset();
+		filesystem_used_bytes.reset();
 
-    cluster_ping_gauge.reset();
-    replication_backlog_gauge.reset();
+		cluster_ping_gauge.reset();
+		replication_backlog_gauge.reset();
 
-    thread_heap_total_gauge.reset();
-    thread_heap_used_gauge.reset();
-    thread_external_memory_gauge.reset();
-    thread_array_buffers_gauge.reset();
+		thread_heap_total_gauge.reset();
+		thread_heap_used_gauge.reset();
+		thread_external_memory_gauge.reset();
+		thread_array_buffers_gauge.reset();
 
-    thread_idle_gauge.reset();
-    thread_active_gauge.reset();
-    thread_utilization_gauge.reset();
+		thread_idle_gauge.reset();
+		thread_active_gauge.reset();
+		thread_utilization_gauge.reset();
 
-    memory_total_gauge.reset();
-    memory_free_gauge.reset();
-    memory_used_gauge.reset();
-    memory_active_gauge.reset();
-    memory_available_gauge.reset();
-    memory_swaptotal_gauge.reset();
-    memory_swapused_gauge.reset();
-    memory_swapfree_gauge.reset();
-    memory_writeback_gauge.reset();
-    memory_dirty_gauge.reset();
-    memory_rss_gauge.reset();
-    memory_heap_total_gauge.reset();
-    memory_heap_used_gauge.reset();
-    memory_external_gauge.reset();
-    memory_array_buffers_gauge.reset();
+		memory_total_gauge.reset();
+		memory_free_gauge.reset();
+		memory_used_gauge.reset();
+		memory_active_gauge.reset();
+		memory_available_gauge.reset();
+		memory_swaptotal_gauge.reset();
+		memory_swapused_gauge.reset();
+		memory_swapfree_gauge.reset();
+		memory_writeback_gauge.reset();
+		memory_dirty_gauge.reset();
+		memory_rss_gauge.reset();
+		memory_heap_total_gauge.reset();
+		memory_heap_used_gauge.reset();
+		memory_external_gauge.reset();
+		memory_array_buffers_gauge.reset();
 
-    const system_info = await hdb_analytics.operation({
-      operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
-    });
+		const system_info = await hdb_analytics.operation({
+			operation: 'system_information',
+			attributes: [ 'database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory' ]
+		});
 
-    gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
-    if (system_info?.threads?.length && system_info?.threads?.length > 0) {
-      system_info.threads.forEach(thread => {
-        gaugeSet(thread_heap_total_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.heapTotal);
-        gaugeSet(thread_heap_used_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.heapUsed);
-        gaugeSet(thread_external_memory_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.externalMemory);
-        gaugeSet(thread_array_buffers_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.arrayBuffers);
+		gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
+		if (system_info?.threads?.length && system_info?.threads?.length > 0) {
+			system_info.threads.forEach(thread => {
+				gaugeSet(thread_heap_total_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.heapTotal);
+				gaugeSet(thread_heap_used_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.heapUsed);
+				gaugeSet(thread_external_memory_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.externalMemory);
+				gaugeSet(thread_array_buffers_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.arrayBuffers);
 
-        gaugeSet(thread_idle_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.idle);
-        gaugeSet(thread_active_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.active);
-        gaugeSet(thread_utilization_gauge, { thread_id: thread?.threadId, name: thread?.name },
-            thread?.utilization);
-      });
-    }
+				gaugeSet(thread_idle_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.idle);
+				gaugeSet(thread_active_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.active);
+				gaugeSet(thread_utilization_gauge, { thread_id: thread?.threadId, name: thread?.name },
+					thread?.utilization);
+			});
+		}
 
-    if(system_info?.memory) {
-      const memory = system_info.memory;
-      gaugeSet(memory_total_gauge, {}, memory.total);
-      gaugeSet(memory_free_gauge, {}, memory.free);
-      gaugeSet(memory_used_gauge, {}, memory.used);
-      gaugeSet(memory_active_gauge, {}, memory.active);
-      gaugeSet(memory_available_gauge, {}, memory.available);
-      gaugeSet(memory_swaptotal_gauge, {}, memory.swaptotal);
-      gaugeSet(memory_swapused_gauge, {}, memory.swapused);
-      gaugeSet(memory_swapfree_gauge, {}, memory.swapfree);
-      gaugeSet(memory_writeback_gauge, {}, memory.writeback);
-      gaugeSet(memory_dirty_gauge, {}, memory.dirty);
-      gaugeSet(memory_rss_gauge, {}, memory.rss);
-      gaugeSet(memory_heap_total_gauge, {}, memory.heapTotal);
-      gaugeSet(memory_heap_used_gauge, {}, memory.heapUsed);
-      gaugeSet(memory_external_gauge, {}, memory.external);
-      gaugeSet(memory_array_buffers_gauge, {}, memory.arrayBuffers);
-    }
+		if (system_info?.memory) {
+			const memory = system_info.memory;
+			gaugeSet(memory_total_gauge, {}, memory.total);
+			gaugeSet(memory_free_gauge, {}, memory.free);
+			gaugeSet(memory_used_gauge, {}, memory.used);
+			gaugeSet(memory_active_gauge, {}, memory.active);
+			gaugeSet(memory_available_gauge, {}, memory.available);
+			gaugeSet(memory_swaptotal_gauge, {}, memory.swaptotal);
+			gaugeSet(memory_swapused_gauge, {}, memory.swapused);
+			gaugeSet(memory_swapfree_gauge, {}, memory.swapfree);
+			gaugeSet(memory_writeback_gauge, {}, memory.writeback);
+			gaugeSet(memory_dirty_gauge, {}, memory.dirty);
+			gaugeSet(memory_rss_gauge, {}, memory.rss);
+			gaugeSet(memory_heap_total_gauge, {}, memory.heapTotal);
+			gaugeSet(memory_heap_used_gauge, {}, memory.heapUsed);
+			gaugeSet(memory_external_gauge, {}, memory.external);
+			gaugeSet(memory_array_buffers_gauge, {}, memory.arrayBuffers);
+		}
 
-    if (system_info?.harperdb_processes?.core?.length > 0) {
-      gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
-        system_info?.harperdb_processes?.core[0]?.cpu);
-    }
-    const sizes = await fsSize();
+		if (system_info?.harperdb_processes?.core?.length > 0) {
+			gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
+				system_info?.harperdb_processes?.core[0]?.cpu);
+		}
+		const sizes = await fsSize();
 
-    sizes.forEach(device => {
-      gaugeSet(filesystem_size_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.size);
-      gaugeSet(filesystem_avail_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.available);
-      gaugeSet(filesystem_used_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.use);
-    });
+		sizes.forEach(device => {
+			gaugeSet(filesystem_size_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
+				device.size);
+			gaugeSet(filesystem_avail_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
+				device.available);
+			gaugeSet(filesystem_used_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
+				device.use);
+		});
 
-    if (system_info.harperdb_processes.clustering?.length > 0) {
-      system_info.harperdb_processes.clustering.forEach(process_data => {
-        if (process_data?.params?.endsWith('hub.json')) {
-          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
-        } else if (process_data?.params?.endsWith('leaf.json')) {
-          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
-        }
-      });
+		if (system_info.harperdb_processes.clustering?.length > 0) {
+			system_info.harperdb_processes.clustering.forEach(process_data => {
+				if (process_data?.params?.endsWith('hub.json')) {
+					gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
+				} else if (process_data?.params?.endsWith('leaf.json')) {
+					gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
+				}
+			});
 
-      // Cluster metrics
-      const cluster_info = await hdb_analytics.operation({
-        operation: 'cluster_network',
-        attributes: ['response_time']
-      });
+			// Launch the cluster_network operation as a background task with 60-second timeout
+			Promise.any([
+				hdb_analytics.operation({
+					operation: 'cluster_network',
+					attributes: [ 'response_time' ]
+				}),
+				new Promise(resolve => {
+					setTimeout(() => resolve(), 60000);
+				})
+			])
+			.then(cluster_info => {
+				// Set cluster_ping_gauge for each node in the cluster
+				if (cluster_info) { // cluster_info will be undefined if the timeout is reached first
+					cluster_info?.nodes?.forEach(node => {
+						gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+					});
+				}
+			})
+			.catch(err => {
+				throw err
+			});
+		}
 
-      if (cluster_info) {
-        // Set cluster_ping_gauge for each node in the cluster
-        cluster_info.nodes?.forEach(node => {
-          gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
-        });
-      }
-    }
+		if (system_info.replication?.length > 0) {
+			system_info.replication?.forEach(repl_item => {
+				repl_item.consumers?.forEach(consumer => {
+					const { database, table } = repl_item;
+					gaugeSet(replication_backlog_gauge, {
+						origin: consumer.name,
+						database,
+						table
+					}, consumer.num_pending || 0);
+				});
+			});
+		}
 
-    if (system_info.replication?.length > 0) {
-      system_info.replication?.forEach(repl_item => {
-        repl_item.consumers?.forEach(consumer => {
-          const { database, table } = repl_item;
-          gaugeSet(replication_backlog_gauge, { origin: consumer.name, database, table }, consumer.num_pending || 0);
-        });
-      });
-    }
+		for (const [ database_name, table_object ] of Object.entries(system_info?.metrics)) {
+			for (const [ table_name, table_metrics ] of Object.entries(table_object)) {
+				const labels = { database: database_name, table: table_name };
+				gaugeSet(puts_gauge, labels, table_metrics?.puts);
+				gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
+				gaugeSet(txns_gauge, labels, table_metrics?.txns);
+				gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
+				gaugeSet(writes_gauge, labels, table_metrics?.writes);
+				gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
+				gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
+				gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
+				gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
+				gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
+			}
+		}
 
-    for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
-      for (const [table_name, table_metrics] of Object.entries(table_object)) {
-        const labels = { database: database_name, table: table_name };
-        gaugeSet(puts_gauge, labels, table_metrics?.puts);
-        gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
-        gaugeSet(txns_gauge, labels, table_metrics?.txns);
-        gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
-        gaugeSet(writes_gauge, labels, table_metrics?.writes);
-        gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
-        gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
-        gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
-        gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
-        gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
-      }
-    }
+		const output = await generateMetricsFromAnalytics();
+		const prom_results = await Prometheus.register.metrics();
 
-    const output = await generateMetricsFromAnalytics();
-    const prom_results = await Prometheus.register.metrics();
-
-    if (output.length > 0) {
-      return output.join('\n') + '\n' + prom_results;
-    } else {
-      return prom_results;
-    }
-  }
+		if (output.length > 0) {
+			return output.join('\n') + '\n' + prom_results;
+		} else {
+			return prom_results;
+		}
+	}
 }
 
 async function generateMetricsFromAnalytics() {
-  const end_at = Date.now();
-  const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
-  let results = await hdb_analytics.search({
-    conditions: [
-      { attribute: 'id', value: [start_at, end_at], comparator: 'between' }
-    ]
-  });
+	const end_at = Date.now();
+	const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
+	let results = await hdb_analytics.search({
+		conditions: [
+			{ attribute: 'id', value: [ start_at, end_at ], comparator: 'between' }
+		]
+	});
 
-  const output = [];
-  const customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value;
+	const output = [];
+	const customMetrics = (await PrometheusExporterSettings.get('customMetrics')).value;
 
-  for await (let metric of results) {
-    if (metric) {
-      // HTTP response status code metrics; status code is in metric name, e.g. response_200
-      if (typeof metric?.metric === 'string' && metric.metric?.startsWith('response_')) {
-        gaugeSet(response_status_code_gauge, { path: metric.path, method: metric.method,
-          status_code: metric.metric.split('_')[1] }, metric.count);
-        continue;
-      }
+	for await (let metric of results) {
+		if (metric) {
+			// HTTP response status code metrics; status code is in metric name, e.g. response_200
+			if (typeof metric?.metric === 'string' && metric.metric?.startsWith('response_')) {
+				gaugeSet(response_status_code_gauge, {
+					path: metric.path, method: metric.method,
+					status_code: metric.metric.split('_')[1]
+				}, metric.count);
+				continue;
+			}
 
-      switch (metric?.metric) {
-        case 'connection':
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
-            metric.count);
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
-            metric.total);
-          gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
-            metric?.count - metric?.total);
-          break;
-        case 'mqtt-connections':
-          gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
-          break;
-        case 'acl-fail':
-          gaugeSet(acl_fail_gauge, { topic: metric.path }, metric.total);
-          break;
-        case 'connections':
-          gaugeSet(open_connections_gauge, { protocol: 'ws' }, metric.connections);
-          break;
-        case 'bytes-sent':
-          gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
-          gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
-          break;
-        case 'bytes-received':
-          gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count * metric.mean);
-          gaugeSet(messages_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
-            metric.count);
-          break;
-        case 'TTFB':
-        case 'duration':
-          output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
-          output.push(`# TYPE ${metric.metric} summary`);
-          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-          break;
-        case 'cache-resolution':
-          //prometheus doesn't like hyphens in metric names
-          let metric_name = 'cache_resolution';
-          output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
-          output.push(`# TYPE ${metric_name} summary`);
-          output.push(`${metric_name}{quantile="0.01",type="${metric.type}",table="${metric.path}"} ${metric.p1}`);
-          output.push(`${metric_name}{quantile="0.10",type="${metric.type}",table="${metric.path}"} ${metric.p10}`);
-          output.push(`${metric_name}{quantile="0.25",type="${metric.type}",table="${metric.path}"} ${metric.p25}`);
-          output.push(`${metric_name}{quantile="0.50",type="${metric.type}",table="${metric.path}"} ${metric.median}`);
-          output.push(`${metric_name}{quantile="0.75",type="${metric.type}",table="${metric.path}"} ${metric.p75}`);
-          output.push(`${metric_name}{quantile="0.90",type="${metric.type}",table="${metric.path}"} ${metric.p90}`);
-          output.push(`${metric_name}{quantile="0.95",type="${metric.type}",table="${metric.path}"} ${metric.p95}`);
-          output.push(`${metric_name}{quantile="0.99",type="${metric.type}",table="${metric.path}"} ${metric.p99}`);
-          output.push(`${metric_name}_sum{type="${metric.type}",table="${metric.path}"} ${metric.mean * metric.count}`);
-          output.push(`${metric_name}_count{type="${metric.type}",table="${metric.path}"} ${metric.count}`);
-          break;
-        case 'cache-hit':
-          gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
-          gaugeSet(cache_miss_gauge, { table: metric.path }, metric.count - metric.total);
-          break;
-        case 'success':
-          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'total' },
-            metric.total);
-          gaugeSet(success_gauge, { path: metric.path, method: metric.method, type: metric.type, label: 'success' },
-            metric.count);
-          break;
-        case 'transfer':
-          output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
-          output.push(`# TYPE ${metric.metric} summary`);
-          output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
-          output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
-          output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
-          output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
-          output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
-          output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
-          output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
-          output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
-          output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
-          output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
-          //needs to be a new line after every metric
-          break;
-        case 'replication-latency':
-          let m_name = 'replication_latency';
-          // Split by '.' on the path value from the metric to get origin, database and table
-          let [txn, database, table, origin] = metric.path?.split('.');
-          origin = origin.replace('-leaf', '');
-          output.push(`# HELP ${m_name} Replication latency`);
-          output.push(`# TYPE ${m_name} summary`);
-          output.push(`${m_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
-          output.push(`${m_name}{quantile="0.10",origin="${origin}",database="${database}",table="${table}"} ${metric.p10}`);
-          output.push(`${m_name}{quantile="0.25",origin="${origin}",database="${database}",table="${table}"} ${metric.p25}`);
-          output.push(`${m_name}{quantile="0.50",origin="${origin}",database="${database}",table="${table}"} ${metric.median}`);
-          output.push(`${m_name}{quantile="0.75",origin="${origin}",database="${database}",table="${table}"} ${metric.p75}`);
-          output.push(`${m_name}{quantile="0.90",origin="${origin}",database="${database}",table="${table}"} ${metric.p90}`);
-          output.push(`${m_name}{quantile="0.95",origin="${origin}",database="${database}",table="${table}"} ${metric.p95}`);
-          output.push(`${m_name}{quantile="0.99",origin="${origin}",database="${database}",table="${table}"} ${metric.p99}`);
+			switch (metric?.metric) {
+				case 'connection':
+					gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'total' },
+						metric.count);
+					gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'success' },
+						metric.total);
+					gaugeSet(connections_gauge, { protocol: metric.path, action: metric.method, type: 'failed' },
+						metric?.count - metric?.total);
+					break;
+				case 'mqtt-connections':
+					gaugeSet(open_connections_gauge, { protocol: 'mqtt' }, metric.connections);
+					break;
+				case 'acl-fail':
+					gaugeSet(acl_fail_gauge, { topic: metric.path }, metric.total);
+					break;
+				case 'connections':
+					gaugeSet(open_connections_gauge, { protocol: 'ws' }, metric.connections);
+					break;
+				case 'bytes-sent':
+					gaugeSet(bytes_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+						metric.count * metric.mean);
+					gaugeSet(messages_sent_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+						metric.count);
+					break;
+				case 'bytes-received':
+					gaugeSet(bytes_received_gauge, { protocol: metric.type, action: metric.method, topic: metric.path },
+						metric.count * metric.mean);
+					gaugeSet(messages_received_gauge, {
+							protocol: metric.type,
+							action: metric.method,
+							topic: metric.path
+						},
+						metric.count);
+					break;
+				case 'TTFB':
+				case 'duration':
+					output.push(`# HELP ${metric.metric} Time for HarperDB to execute request in ms`);
+					output.push(`# TYPE ${metric.metric} summary`);
+					output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+					output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+					output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+					output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+					output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+					output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+					output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+					output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+					output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+					output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+					break;
+				case 'cache-resolution':
+					//prometheus doesn't like hyphens in metric names
+					let metric_name = 'cache_resolution';
+					output.push(`# HELP ${metric_name} Time to resolve a cache miss`);
+					output.push(`# TYPE ${metric_name} summary`);
+					output.push(`${metric_name}{quantile="0.01",type="${metric.type}",table="${metric.path}"} ${metric.p1}`);
+					output.push(`${metric_name}{quantile="0.10",type="${metric.type}",table="${metric.path}"} ${metric.p10}`);
+					output.push(`${metric_name}{quantile="0.25",type="${metric.type}",table="${metric.path}"} ${metric.p25}`);
+					output.push(`${metric_name}{quantile="0.50",type="${metric.type}",table="${metric.path}"} ${metric.median}`);
+					output.push(`${metric_name}{quantile="0.75",type="${metric.type}",table="${metric.path}"} ${metric.p75}`);
+					output.push(`${metric_name}{quantile="0.90",type="${metric.type}",table="${metric.path}"} ${metric.p90}`);
+					output.push(`${metric_name}{quantile="0.95",type="${metric.type}",table="${metric.path}"} ${metric.p95}`);
+					output.push(`${metric_name}{quantile="0.99",type="${metric.type}",table="${metric.path}"} ${metric.p99}`);
+					output.push(`${metric_name}_sum{type="${metric.type}",table="${metric.path}"} ${metric.mean * metric.count}`);
+					output.push(`${metric_name}_count{type="${metric.type}",table="${metric.path}"} ${metric.count}`);
+					break;
+				case 'cache-hit':
+					gaugeSet(cache_hits_gauge, { table: metric.path }, metric.total);
+					gaugeSet(cache_miss_gauge, { table: metric.path }, metric.count - metric.total);
+					break;
+				case 'success':
+					gaugeSet(success_gauge, {
+							path: metric.path,
+							method: metric.method,
+							type: metric.type,
+							label: 'total'
+						},
+						metric.total);
+					gaugeSet(success_gauge, {
+							path: metric.path,
+							method: metric.method,
+							type: metric.type,
+							label: 'success'
+						},
+						metric.count);
+					break;
+				case 'transfer':
+					output.push(`# HELP ${metric.metric} Time to transfer request (ms)`);
+					output.push(`# TYPE ${metric.metric} summary`);
+					output.push(`${metric.metric}{quantile="0.01",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p1}`);
+					output.push(`${metric.metric}{quantile="0.10",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p10}`);
+					output.push(`${metric.metric}{quantile="0.25",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p25}`);
+					output.push(`${metric.metric}{quantile="0.50",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.median}`);
+					output.push(`${metric.metric}{quantile="0.75",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p75}`);
+					output.push(`${metric.metric}{quantile="0.90",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p90}`);
+					output.push(`${metric.metric}{quantile="0.95",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p95}`);
+					output.push(`${metric.metric}{quantile="0.99",type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.p99}`);
+					output.push(`${metric.metric}_sum{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.mean * metric.count}`);
+					output.push(`${metric.metric}_count{type="${metric.type}",path="${metric.path}",method="${metric.method}"} ${metric.count}`);
+					//needs to be a new line after every metric
+					break;
+				case 'replication-latency':
+					let m_name = 'replication_latency';
+					// Split by '.' on the path value from the metric to get origin, database and table
+					let [ txn, database, table, origin ] = metric.path?.split('.');
+					origin = origin.replace('-leaf', '');
+					output.push(`# HELP ${m_name} Replication latency`);
+					output.push(`# TYPE ${m_name} summary`);
+					output.push(`${m_name}{quantile="0.01",origin="${origin}",database="${database}",table="${table}"} ${metric.p1}`);
+					output.push(`${m_name}{quantile="0.10",origin="${origin}",database="${database}",table="${table}"} ${metric.p10}`);
+					output.push(`${m_name}{quantile="0.25",origin="${origin}",database="${database}",table="${table}"} ${metric.p25}`);
+					output.push(`${m_name}{quantile="0.50",origin="${origin}",database="${database}",table="${table}"} ${metric.median}`);
+					output.push(`${m_name}{quantile="0.75",origin="${origin}",database="${database}",table="${table}"} ${metric.p75}`);
+					output.push(`${m_name}{quantile="0.90",origin="${origin}",database="${database}",table="${table}"} ${metric.p90}`);
+					output.push(`${m_name}{quantile="0.95",origin="${origin}",database="${database}",table="${table}"} ${metric.p95}`);
+					output.push(`${m_name}{quantile="0.99",origin="${origin}",database="${database}",table="${table}"} ${metric.p99}`);
 
-          // Add sum and count
-          output.push(`${m_name}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
-          output.push(`${m_name}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
-          break;
-        default:
-          await outputCustomMetrics(customMetrics, metric, output);
-          break;
-      }
-    }
-  }
-  return output;
+					// Add sum and count
+					output.push(`${m_name}_sum{origin="${origin}",database="${database}",table="${table}"} ${metric.mean * metric.count}`);
+					output.push(`${m_name}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
+					break;
+				default:
+					await outputCustomMetrics(customMetrics, metric, output);
+					break;
+			}
+		}
+	}
+	return output;
 }
 
 // Call set() function on any gauge object with a default value of 0
 const gaugeSet = (gauge, options, value) => gauge?.set(options, value || 0);
 
 async function outputCustomMetrics(customMetrics, metric, output) {
-  customMetrics.forEach(custom_metric => {
-    const customMetricName = custom_metric.get('name');
-    if (metric[custom_metric.get('metricAttribute')] === customMetricName) {
-      output.push(`# HELP ${customMetricName} ${custom_metric.help}`);
-      output.push(`# TYPE ${customMetricName} summary`);
+	customMetrics.forEach(custom_metric => {
+		const customMetricName = custom_metric.get('name');
+		if (metric[custom_metric.get('metricAttribute')] === customMetricName) {
+			output.push(`# HELP ${customMetricName} ${custom_metric.help}`);
+			output.push(`# TYPE ${customMetricName} summary`);
 
-      const labels = buildCustomLabels(custom_metric, metric);
+			const labels = buildCustomLabels(custom_metric, metric);
 
-      output.push(`${customMetricName}{quantile="0.01",${labels}} ${metric.p1 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.10",${labels}} ${metric.p10 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.25",${labels}} ${metric.p25 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.50",${labels}} ${metric.median ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.75",${labels}} ${metric.p75 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.90",${labels}} ${metric.p90 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.95",${labels}} ${metric.p95 ?? 0}`);
-      output.push(`${customMetricName}{quantile="0.99",${labels}} ${metric.p99 ?? 0}`);
-      output.push(`${customMetricName}_sum{${labels}} ${((metric.mean ?? 0) * (metric.count ?? 0))}`);
-      output.push(`${customMetricName}_count{${labels}} ${metric.count}`);
-    }
-  });
+			output.push(`${customMetricName}{quantile="0.01",${labels}} ${metric.p1 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.10",${labels}} ${metric.p10 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.25",${labels}} ${metric.p25 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.50",${labels}} ${metric.median ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.75",${labels}} ${metric.p75 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.90",${labels}} ${metric.p90 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.95",${labels}} ${metric.p95 ?? 0}`);
+			output.push(`${customMetricName}{quantile="0.99",${labels}} ${metric.p99 ?? 0}`);
+			output.push(`${customMetricName}_sum{${labels}} ${((metric.mean ?? 0) * (metric.count ?? 0))}`);
+			output.push(`${customMetricName}_count{${labels}} ${metric.count}`);
+		}
+	});
 }
 
 function buildCustomLabels(custom_metric, metric) {
-  let labels = [];
-  custom_metric.get('labels').forEach(label => {
-    labels.push(`${label.label}="${metric[label.metricAttribute]}"`);
-  });
-  return labels.join(',');
+	let labels = [];
+	custom_metric.get('labels').forEach(label => {
+		labels.push(`${label.label}="${metric[label.metricAttribute]}"`);
+	});
+	return labels.join(',');
 }
 
 export const prometheus_exporter = {
-  metrics,
-  PrometheusExporterSettings
+	metrics,
+	PrometheusExporterSettings
 };
