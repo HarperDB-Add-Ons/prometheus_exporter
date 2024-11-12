@@ -231,13 +231,13 @@ class metrics extends Resource {
 			});
 
 			// Launch the cluster_network operation as a background task with 60-second timeout
-			Promise.any([
+			Promise.race([
 				hdb_analytics.operation({
 					operation: 'cluster_network',
 					attributes: [ 'response_time' ]
 				}),
 				new Promise(resolve => {
-					setTimeout(() => resolve(), 60000);
+					setTimeout(() => resolve(), 40000);
 				})
 			])
 			.then(cluster_info => {
