@@ -112,6 +112,8 @@ class metrics extends Resource {
   }
 
   async get() {
+    // optional 'fast' param is used to return metrics faster and skip metrics less important.
+    let notFast = this?.getId() !== 'fast';
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
     puts_gauge.reset();
     deletes_gauge.reset();
@@ -237,17 +239,20 @@ class metrics extends Resource {
         }
       });
 
-      // Cluster metrics
-      const cluster_info = await hdb_analytics.operation({
-        operation: 'cluster_network',
-        attributes: ['response_time']
-      });
-
-      if (cluster_info) {
-        // Set cluster_ping_gauge for each node in the cluster
-        cluster_info.nodes?.forEach(node => {
-          gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+      // retrieve cluster_network details if notFast
+      if(notFast) {
+        // Cluster metrics
+        const cluster_info = await hdb_analytics.operation({
+          operation: 'cluster_network',
+          attributes: ['response_time']
         });
+
+        if (cluster_info) {
+          // Set cluster_ping_gauge for each node in the cluster
+          cluster_info.nodes?.forEach(node => {
+            gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+          });
+        }
       }
     }
 
@@ -276,7 +281,8 @@ class metrics extends Resource {
       }
     }
 
-    const output = await generateMetricsFromAnalytics();
+
+    const output = await generateMetricsFromAnalytics(notFast);
     const prom_results = await Prometheus.register.metrics();
 
     if (output.length > 0) {
@@ -287,7 +293,7 @@ class metrics extends Resource {
   }
 }
 
-async function generateMetricsFromAnalytics() {
+async function generateMetricsFromAnalytics(notFast) {
   const end_at = Date.now();
   const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
   let results = await hdb_analytics.search({
@@ -415,7 +421,9 @@ async function generateMetricsFromAnalytics() {
           output.push(`${m_name}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
           break;
         default:
-          await outputCustomMetrics(customMetrics, metric, output);
+          if(notFast) {
+            await outputCustomMetrics(customMetrics, metric, output);
+          }
           break;
       }
     }
