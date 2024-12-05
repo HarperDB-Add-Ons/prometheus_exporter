@@ -170,10 +170,13 @@ class metrics extends Resource {
     memory_external_gauge.reset();
     memory_array_buffers_gauge.reset();
 
-    const system_info = await hdb_analytics.operation({
-      operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
-    });
+    let system_info;
+    if(notFast) {
+      system_info = await hdb_analytics.operation({
+        operation: 'system_information',
+        attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
+      });
+    }
 
     gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
     if (system_info?.threads?.length && system_info?.threads?.length > 0) {
@@ -230,7 +233,7 @@ class metrics extends Resource {
         device.use);
     });
 
-    if (system_info.harperdb_processes.clustering?.length > 0) {
+    if (system_info?.harperdb_processes.clustering?.length > 0) {
       system_info.harperdb_processes.clustering.forEach(process_data => {
         if (process_data?.params?.endsWith('hub.json')) {
           gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
@@ -256,7 +259,7 @@ class metrics extends Resource {
       }
     }
 
-    if (system_info.replication?.length > 0) {
+    if (system_info?.replication?.length > 0) {
       system_info.replication?.forEach(repl_item => {
         repl_item.consumers?.forEach(consumer => {
           const { database, table } = repl_item;
@@ -265,19 +268,21 @@ class metrics extends Resource {
       });
     }
 
-    for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
-      for (const [table_name, table_metrics] of Object.entries(table_object)) {
-        const labels = { database: database_name, table: table_name };
-        gaugeSet(puts_gauge, labels, table_metrics?.puts);
-        gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
-        gaugeSet(txns_gauge, labels, table_metrics?.txns);
-        gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
-        gaugeSet(writes_gauge, labels, table_metrics?.writes);
-        gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
-        gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
-        gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
-        gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
-        gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
+    if(system_info?.metrics) {
+      for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
+        for (const [table_name, table_metrics] of Object.entries(table_object)) {
+          const labels = { database: database_name, table: table_name };
+          gaugeSet(puts_gauge, labels, table_metrics?.puts);
+          gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
+          gaugeSet(txns_gauge, labels, table_metrics?.txns);
+          gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
+          gaugeSet(writes_gauge, labels, table_metrics?.writes);
+          gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
+          gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
+          gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
+          gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
+          gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
+        }
       }
     }
 
