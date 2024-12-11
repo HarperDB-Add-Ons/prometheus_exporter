@@ -112,6 +112,8 @@ class metrics extends Resource {
   }
 
   async get() {
+    // optional 'fast' param is used to return metrics faster and skip metrics less important.
+    let notFast = this?.getId() !== 'fast';
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
     puts_gauge.reset();
     deletes_gauge.reset();
@@ -168,10 +170,13 @@ class metrics extends Resource {
     memory_external_gauge.reset();
     memory_array_buffers_gauge.reset();
 
-    const system_info = await hdb_analytics.operation({
-      operation: 'system_information',
-      attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
-    });
+    let system_info;
+    if(notFast) {
+      system_info = await hdb_analytics.operation({
+        operation: 'system_information',
+        attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
+      });
+    }
 
     gaugeSet(thread_count_gauge, {}, system_info?.threads?.length);
     if (system_info?.threads?.length && system_info?.threads?.length > 0) {
@@ -228,7 +233,7 @@ class metrics extends Resource {
         device.use);
     });
 
-    if (system_info.harperdb_processes.clustering?.length > 0) {
+    if (system_info?.harperdb_processes.clustering?.length > 0) {
       system_info.harperdb_processes.clustering.forEach(process_data => {
         if (process_data?.params?.endsWith('hub.json')) {
           gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
@@ -237,21 +242,24 @@ class metrics extends Resource {
         }
       });
 
-      // Cluster metrics
-      const cluster_info = await hdb_analytics.operation({
-        operation: 'cluster_network',
-        attributes: ['response_time']
-      });
-
-      if (cluster_info) {
-        // Set cluster_ping_gauge for each node in the cluster
-        cluster_info.nodes?.forEach(node => {
-          gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+      // retrieve cluster_network details if notFast
+      if(notFast) {
+        // Cluster metrics
+        const cluster_info = await hdb_analytics.operation({
+          operation: 'cluster_network',
+          attributes: ['response_time']
         });
+
+        if (cluster_info) {
+          // Set cluster_ping_gauge for each node in the cluster
+          cluster_info.nodes?.forEach(node => {
+            gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+          });
+        }
       }
     }
 
-    if (system_info.replication?.length > 0) {
+    if (system_info?.replication?.length > 0) {
       system_info.replication?.forEach(repl_item => {
         repl_item.consumers?.forEach(consumer => {
           const { database, table } = repl_item;
@@ -260,23 +268,26 @@ class metrics extends Resource {
       });
     }
 
-    for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
-      for (const [table_name, table_metrics] of Object.entries(table_object)) {
-        const labels = { database: database_name, table: table_name };
-        gaugeSet(puts_gauge, labels, table_metrics?.puts);
-        gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
-        gaugeSet(txns_gauge, labels, table_metrics?.txns);
-        gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
-        gaugeSet(writes_gauge, labels, table_metrics?.writes);
-        gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
-        gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
-        gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
-        gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
-        gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
+    if(system_info?.metrics) {
+      for (const [database_name, table_object] of Object.entries(system_info?.metrics)) {
+        for (const [table_name, table_metrics] of Object.entries(table_object)) {
+          const labels = { database: database_name, table: table_name };
+          gaugeSet(puts_gauge, labels, table_metrics?.puts);
+          gaugeSet(deletes_gauge, labels, table_metrics?.deletes);
+          gaugeSet(txns_gauge, labels, table_metrics?.txns);
+          gaugeSet(page_flushes_gauge, labels, table_metrics?.pageFlushes);
+          gaugeSet(writes_gauge, labels, table_metrics?.writes);
+          gaugeSet(pages_written_gauge, labels, table_metrics?.pagesWritten);
+          gaugeSet(time_during_txns_gauge, labels, table_metrics?.timeDuringTxns);
+          gaugeSet(time_start_txns_gauge, labels, table_metrics?.timeStartTxns);
+          gaugeSet(time_page_flushes_gauge, labels, table_metrics?.timePageFlushes);
+          gaugeSet(time_sync_gauge, labels, table_metrics?.timeSync);
+        }
       }
     }
 
-    const output = await generateMetricsFromAnalytics();
+
+    const output = await generateMetricsFromAnalytics(notFast);
     const prom_results = await Prometheus.register.metrics();
 
     if (output.length > 0) {
@@ -287,7 +298,7 @@ class metrics extends Resource {
   }
 }
 
-async function generateMetricsFromAnalytics() {
+async function generateMetricsFromAnalytics(notFast) {
   const end_at = Date.now();
   const start_at = end_at - (AGGREGATE_PERIOD_MS * 1.5);
   let results = await hdb_analytics.search({
@@ -415,7 +426,9 @@ async function generateMetricsFromAnalytics() {
           output.push(`${m_name}_count{origin="${origin}",database="${database}",table="${table}"} ${metric.count}`);
           break;
         default:
-          await outputCustomMetrics(customMetrics, metric, output);
+          if(notFast) {
+            await outputCustomMetrics(customMetrics, metric, output);
+          }
           break;
       }
     }
