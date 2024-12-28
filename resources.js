@@ -1,5 +1,3 @@
-import { fsSize } from 'systeminformation';
-
 const { hdb_analytics } = databases.system;
 const { analytics } = server.config;
 
@@ -174,7 +172,7 @@ class metrics extends Resource {
     if(notFast) {
       system_info = await hdb_analytics.operation({
         operation: 'system_information',
-        attributes: ['database_metrics', 'harperdb_processes', 'replication', 'threads', 'memory']
+        attributes: ['database_metrics', 'replication', 'threads', 'memory']
       });
     }
 
@@ -218,32 +216,10 @@ class metrics extends Resource {
       gaugeSet(memory_array_buffers_gauge, {}, memory.arrayBuffers);
     }
 
-    if (system_info?.harperdb_processes?.core?.length > 0) {
-      gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_core' },
-        system_info?.harperdb_processes?.core[0]?.cpu);
-    }
-    const sizes = await fsSize();
 
-    sizes.forEach(device => {
-      gaugeSet(filesystem_size_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.size);
-      gaugeSet(filesystem_avail_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.available);
-      gaugeSet(filesystem_used_bytes, { device: device.fs, fstype: device.type, mountpoint: device.mount },
-        device.use);
-    });
-
-    if (system_info?.harperdb_processes.clustering?.length > 0) {
-      system_info.harperdb_processes.clustering.forEach(process_data => {
-        if (process_data?.params?.endsWith('hub.json')) {
-          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_hub' }, process_data.cpu);
-        } else if (process_data?.params?.endsWith('leaf.json')) {
-          gaugeSet(harperdb_cpu_percentage_gauge, { process_name: 'harperdb_clustering_leaf' }, process_data.cpu);
-        }
-      });
-
-      // retrieve cluster_network details if notFast
-      if(notFast) {
+    // retrieve cluster_network details if notFast
+    if(notFast) {
+      try {
         // Cluster metrics
         const cluster_info = await hdb_analytics.operation({
           operation: 'cluster_network',
@@ -256,6 +232,8 @@ class metrics extends Resource {
             gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
           });
         }
+      } catch(error) {
+        logger.debug('Error fetching cluster network metrics', error);
       }
     }
 
