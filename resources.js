@@ -232,22 +232,23 @@ class metrics extends Resource {
             cluster_info.nodes?.forEach(node => {
               gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
             });
-          } else if(replication){
-            const cluster_info = await hdb_analytics.operation({
-              operation: "cluster_status"
-            });
 
-            if (cluster_info) {
-              cluster_info.connections?.forEach(node => {
-                //calculate the average of latencies for the connected node
-                let total_latency = 0;
-                node.database_sockets.forEach(socket => {
-                  total_latency += socket.latency;
-                });
+          }
+        } else if(replication){
+          const cluster_info = await hdb_analytics.operation({
+            operation: "cluster_status"
+          });
 
-                gaugeSet(cluster_ping_gauge, { node: node?.name }, total_latency / node.database_sockets.length)
+          if (cluster_info) {
+            cluster_info.connections?.forEach(node => {
+              //calculate the average of latencies for the connected node
+              let total_latency = 0;
+              node.database_sockets.forEach(socket => {
+                total_latency += socket.latency;
               });
-            }
+
+              gaugeSet(cluster_ping_gauge, { node: node?.name }, total_latency / node.database_sockets.length)
+            });
           }
         }
       } catch(error) {
