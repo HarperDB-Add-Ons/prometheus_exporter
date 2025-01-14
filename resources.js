@@ -1,5 +1,5 @@
 const { hdb_analytics } = databases.system;
-const { analytics } = server.config;
+const { analytics, clustering, replication } = server.config;
 
 import { createRequire } from "module";
 
@@ -221,16 +221,35 @@ class metrics extends Resource {
     if(notFast) {
       try {
         // Cluster metrics
-        const cluster_info = await hdb_analytics.operation({
-          operation: 'cluster_network',
-          attributes: ['response_time']
-        });
-
-        if (cluster_info) {
-          // Set cluster_ping_gauge for each node in the cluster
-          cluster_info.nodes?.forEach(node => {
-            gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+        if(clustering?.enabled) {
+          const cluster_info = await hdb_analytics.operation({
+            operation: "cluster_network",
+            attributes: ["response_time"]
           });
+
+          if (cluster_info) {
+            // Set cluster_ping_gauge for each node in the cluster
+            cluster_info.nodes?.forEach(node => {
+              gaugeSet(cluster_ping_gauge, { node: node?.name }, node?.response_time);
+            });
+
+          }
+        } else if(replication){
+          const cluster_info = await hdb_analytics.operation({
+            operation: "cluster_status"
+          });
+
+          if (cluster_info) {
+            cluster_info.connections?.forEach(node => {
+              //calculate the average of latencies for the connected node
+              let total_latency = 0;
+              node.database_sockets.forEach(socket => {
+                total_latency += socket.latency;
+              });
+
+              gaugeSet(cluster_ping_gauge, { node: node?.name }, total_latency / node.database_sockets.length)
+            });
+          }
         }
       } catch(error) {
         logger.debug('Error fetching cluster network metrics', error);
