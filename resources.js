@@ -1,6 +1,8 @@
 const { hdb_analytics } = databases.system;
 const { analytics, clustering, replication } = server.config;
 
+import process from 'node:process';
+
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
@@ -93,6 +95,9 @@ if (server.workerIndex == 0) {
 }
 
 class metrics extends Resource {
+  lastScrapeTime = process.hrtime.bigint();
+  lastCPUTimes = process.cpuUsage();
+
   async allowRead(user) {
     let forceAuthorization = (await PrometheusExporterSettings.get('forceAuthorization')).value;
 
@@ -109,7 +114,43 @@ class metrics extends Resource {
       return user?.role?.role === 'super_user';
   }
 
+  getLastScrapeTime() {
+    logger.debug(`getLastScrapeTime: ${this.lastScrapeTime}`);
+    return this.lastScrapeTime;
+  }
+
+  getLastCPUTimes() {
+    logger.debug(`getLastCPUTimes: ${JSON.stringify(this.lastCPUTimes)}`);
+    return this.lastCPUTimes;
+  }
+
+  setLastScrapeTime(lastScrapeTime) {
+    logger.debug(`setLastScrapeTime: ${lastScrapeTime}`);
+    this.lastScrapeTime = lastScrapeTime;
+  }
+
+  setLastCPUTimes(cpuTimes) {
+    logger.debug(`setLastCPUTimes: ${JSON.stringify(cpuTimes)}`);
+    this.lastCPUTimes = cpuTimes;
+  }
+
+  getCPUUsageSince(startTime) {
+    const endTime = process.hrtime.bigint();
+    const timeElapsed = endTime - startTime;
+    const { user, system } = process.cpuUsage(this.getLastCPUTimes());
+    const userMS = user / 1000;
+    const systemMS = system / 1000;
+
+    const cpuPercent = Math.round(100 * (userMS + systemMS) / Number(timeElapsed));
+    logger.debug(`CPU utilization: ${cpuPercent}%`);
+
+    return cpuPercent;
+  }
+
   async get() {
+    this.setLastScrapeTime(process.hrtime.bigint());
+    this.setLastCPUTimes(process.cpuUsage(this.getLastCPUTimes()));
+
     // optional 'fast' param is used to return metrics faster and skip metrics less important.
     let notFast = this?.getId() !== 'fast';
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
@@ -216,6 +257,9 @@ class metrics extends Resource {
       gaugeSet(memory_array_buffers_gauge, {}, memory.arrayBuffers);
     }
 
+    // CPU usage
+    const cpuUsage = this.getCPUUsageSince(this.getLastScrapeTime());
+    gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuUsage);
 
     // retrieve cluster_network details if notFast
     if(notFast) {
