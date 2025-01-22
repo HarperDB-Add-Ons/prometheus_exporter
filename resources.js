@@ -134,23 +134,29 @@ class metrics extends Resource {
     this.lastCPUTimes = cpuTimes;
   }
 
-  getCPUUsageSince(startTime) {
+  getCPUUsage() {
+    const startTime = this.getLastScrapeTime();
     const endTime = process.hrtime.bigint();
     const timeElapsed = endTime - startTime;
     const { user, system } = process.cpuUsage(this.getLastCPUTimes());
-    const userMS = user / 1000;
-    const systemMS = system / 1000;
+    const userNS = BigInt(user * 1000);
+    const systemNS = BigInt(system * 1000);
+    const cpuTime = userNS + systemNS;
+    logger.debug(`CPU time: ${cpuTime} ns`);
+    logger.debug(`Time elapsed: ${timeElapsed} ns`);
 
-    const cpuPercent = Math.round(100 * (userMS + systemMS) / Number(timeElapsed));
+    const cpuPercent = Number((cpuTime * 100n) / timeElapsed);
     logger.debug(`CPU utilization: ${cpuPercent}%`);
 
-    return cpuPercent;
+    return {
+      cpuPercent,
+      user,
+      system,
+      period: timeElapsed,
+    };
   }
 
   async get() {
-    this.setLastScrapeTime(process.hrtime.bigint());
-    this.setLastCPUTimes(process.cpuUsage(this.getLastCPUTimes()));
-
     // optional 'fast' param is used to return metrics faster and skip metrics less important.
     let notFast = this?.getId() !== 'fast';
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
@@ -258,8 +264,10 @@ class metrics extends Resource {
     }
 
     // CPU usage
-    const cpuUsage = this.getCPUUsageSince(this.getLastScrapeTime());
-    gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuUsage);
+    const { cpuPercent, user, system } = this.getCPUUsage();
+    gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuPercent);
+    this.setLastScrapeTime(process.hrtime.bigint());
+    this.setLastCPUTimes(process.cpuUsage({ user, system }));
 
     // retrieve cluster_network details if notFast
     if(notFast) {
