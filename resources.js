@@ -95,7 +95,7 @@ if (server.workerIndex == 0) {
 }
 
 class metrics extends Resource {
-  lastScrapeTime = process.hrtime.bigint();
+  lastScrapeTime = Number(process.hrtime.bigint() / 1000n); // normalize to microseconds
   lastCPUTimes = process.cpuUsage();
 
   async allowRead(user) {
@@ -134,23 +134,27 @@ class metrics extends Resource {
     this.lastCPUTimes = cpuTimes;
   }
 
-  getCPUUsageSince(startTime) {
-    const endTime = process.hrtime.bigint();
+  getCPUUsage() {
+    const startTime = this.getLastScrapeTime();
+    const endTime = Number(process.hrtime.bigint() / 1000n); // normalize to microseconds
     const timeElapsed = endTime - startTime;
     const { user, system } = process.cpuUsage(this.getLastCPUTimes());
-    const userMS = user / 1000;
-    const systemMS = system / 1000;
+    const cpuTime = user + system;
+    logger.debug(`CPU time: ${cpuTime} µs`);
+    logger.debug(`Time elapsed: ${timeElapsed} µs`);
 
-    const cpuPercent = Math.round(100 * (userMS + systemMS) / Number(timeElapsed));
+    const cpuPercent = (cpuTime / timeElapsed).toFixed(2);
     logger.debug(`CPU utilization: ${cpuPercent}%`);
 
-    return cpuPercent;
+    return {
+      cpuPercent,
+      user,
+      system,
+      period: timeElapsed,
+    };
   }
 
   async get() {
-    this.setLastScrapeTime(process.hrtime.bigint());
-    this.setLastCPUTimes(process.cpuUsage(this.getLastCPUTimes()));
-
     // optional 'fast' param is used to return metrics faster and skip metrics less important.
     let notFast = this?.getId() !== 'fast';
     //reset the gauges, this is due to the values staying "stuck" if there is no system info metric value for the prometheus metric.  If our system info has no metrics we then need the metric to be zero.
@@ -258,8 +262,10 @@ class metrics extends Resource {
     }
 
     // CPU usage
-    const cpuUsage = this.getCPUUsageSince(this.getLastScrapeTime());
-    gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuUsage);
+    const { cpuPercent, user, system } = this.getCPUUsage();
+    gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuPercent);
+    this.setLastScrapeTime(Number(process.hrtime.bigint() / 1000n));
+    this.setLastCPUTimes(process.cpuUsage({ user, system }));
 
     // retrieve cluster_network details if notFast
     if(notFast) {
