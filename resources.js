@@ -95,7 +95,7 @@ if (server.workerIndex == 0) {
 }
 
 class metrics extends Resource {
-  lastScrapeTime = process.hrtime.bigint();
+  lastScrapeTime = Number(process.hrtime.bigint() / 1000n); // normalize to microseconds
   lastCPUTimes = process.cpuUsage();
 
   async allowRead(user) {
@@ -136,16 +136,14 @@ class metrics extends Resource {
 
   getCPUUsage() {
     const startTime = this.getLastScrapeTime();
-    const endTime = process.hrtime.bigint();
+    const endTime = Number(process.hrtime.bigint() / 1000n); // normalize to microseconds
     const timeElapsed = endTime - startTime;
     const { user, system } = process.cpuUsage(this.getLastCPUTimes());
-    const userNS = BigInt(user * 1000);
-    const systemNS = BigInt(system * 1000);
-    const cpuTime = userNS + systemNS;
-    logger.debug(`CPU time: ${cpuTime} ns`);
-    logger.debug(`Time elapsed: ${timeElapsed} ns`);
+    const cpuTime = user + system;
+    logger.debug(`CPU time: ${cpuTime} µs`);
+    logger.debug(`Time elapsed: ${timeElapsed} µs`);
 
-    const cpuPercent = Number((cpuTime * 100n) / timeElapsed);
+    const cpuPercent = (cpuTime / timeElapsed).toFixed(2);
     logger.debug(`CPU utilization: ${cpuPercent}%`);
 
     return {
@@ -266,7 +264,7 @@ class metrics extends Resource {
     // CPU usage
     const { cpuPercent, user, system } = this.getCPUUsage();
     gaugeSet(harperdb_cpu_percentage_gauge, {}, cpuPercent);
-    this.setLastScrapeTime(process.hrtime.bigint());
+    this.setLastScrapeTime(Number(process.hrtime.bigint() / 1000n));
     this.setLastCPUTimes(process.cpuUsage({ user, system }));
 
     // retrieve cluster_network details if notFast
