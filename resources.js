@@ -482,9 +482,9 @@ const gaugeSet = (gauge, options, value) => gauge?.set(options, value || 0);
 
 async function outputCustomMetrics(customMetrics, metric, output) {
   customMetrics.forEach(custom_metric => {
-    const customMetricName = custom_metric.get('name');
-    if (metric[custom_metric.get('metricAttribute')] === customMetricName) {
-      output.push(`# HELP ${customMetricName} ${custom_metric.help}`);
+    if (metric[custom_metric.get('metricAttribute')] === custom_metric.get('name')) {
+      const customMetricName = custom_metric.get('name').replace(/-/g, '_');
+      output.push(`# HELP ${customMetricName} ${custom_metric.get('help')}`);
       output.push(`# TYPE ${customMetricName} summary`);
 
       const labels = buildCustomLabels(custom_metric, metric);
