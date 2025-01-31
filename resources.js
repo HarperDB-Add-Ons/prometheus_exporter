@@ -143,7 +143,7 @@ class metrics extends Resource {
     logger.debug(`CPU time: ${cpuTime} µs`);
     logger.debug(`Time elapsed: ${timeElapsed} µs`);
 
-    const cpuPercent = (cpuTime / timeElapsed).toFixed(2);
+    const cpuPercent = Math.round((cpuTime / timeElapsed) * 1e2) / 1e2;
     logger.debug(`CPU utilization: ${cpuPercent}%`);
 
     return {
