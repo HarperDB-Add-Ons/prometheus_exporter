@@ -4,7 +4,8 @@
   "version": "1.0.21",
   "description": "HarperDB Prometheus Exporter",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "./run-in-docker.sh"
   },
   "author": "HarperDB, Inc.",
   "license": "ISC",
