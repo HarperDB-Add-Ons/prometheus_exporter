@@ -1,6 +1,6 @@
 {
   "name": "@harperdb/prometheus-exporter",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "HarperDB Prometheus Exporter",
   "type": "module",
   "scripts": {
