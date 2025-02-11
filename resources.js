@@ -1,17 +1,12 @@
+import process from 'node:process';
+import Prometheus from 'prom-client';
+
 const { hdb_analytics } = databases.system;
 const { analytics, clustering, replication } = server.config;
-
-import process from 'node:process';
-
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
 
 const { PrometheusExporterSettings } = tables;
 
 const AGGREGATE_PERIOD_MS = analytics?.aggregatePeriod ? analytics?.aggregatePeriod * 1000 : 600000;
-
-import Prometheus from 'prom-client';
 
 Prometheus.collectDefaultMetrics();
 Prometheus.register.setContentType(
@@ -84,14 +79,11 @@ const memory_array_buffers_gauge = new Prometheus.Gauge({ name: 'memory_array_bu
 
 //logic to create a settings.json file if one does not exist
 if (server.workerIndex == 0) {
-  (async () => {
-
-    if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
-      PrometheusExporterSettings.put({ name: "forceAuthorization", value: true });
-      PrometheusExporterSettings.put({ name: "allowedUsers", value: [] });
-      PrometheusExporterSettings.put({ name: "customMetrics", value: [] });
-    }
-  })();
+  if (PrometheusExporterSettings.getRecordCount({ exactCount: false }).recordCount === 0) {
+    PrometheusExporterSettings.put({ name: "forceAuthorization", value: true }),
+    PrometheusExporterSettings.put({ name: "allowedUsers", value: [] }),
+    PrometheusExporterSettings.put({ name: "customMetrics", value: [] })
+  }
 }
 
 class metrics extends Resource {

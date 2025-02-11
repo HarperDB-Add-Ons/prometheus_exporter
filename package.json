@@ -1,14 +1,12 @@
 {
-  "type": "module",
-  "name": "harperdb_prometheus_exporter",
+  "name": "@harperdb/prometheus-exporter",
   "version": "1.0.22",
   "description": "HarperDB Prometheus Exporter",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "./run-in-docker.sh"
   },
   "author": "HarperDB, Inc.",
-  "license": "ISC",
   "dependencies": {
     "prom-client": "^15.1.1"
   }
